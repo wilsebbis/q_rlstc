@@ -48,6 +48,7 @@ class SPSAOptimizer:
         c: float = 0.08,
         alpha: float = 0.602,
         gamma: float = 0.101,
+        max_grad_norm: float = 10.0,
         seed: int = 42,
     ):
         """Initialize SPSA optimizer.
@@ -58,6 +59,7 @@ class SPSAOptimizer:
             c: Initial perturbation magnitude.
             alpha: Learning rate decay exponent (theory: 1.0, practice: ~0.6).
             gamma: Perturbation decay exponent (theory: 1/6, practice: ~0.1).
+            max_grad_norm: Maximum gradient norm for clipping (NISQ noise robustness).
             seed: Random seed for perturbations.
         """
         self.A = A
@@ -65,6 +67,7 @@ class SPSAOptimizer:
         self.c = c
         self.alpha = alpha
         self.gamma = gamma
+        self.max_grad_norm = max_grad_norm
         self.rng = np.random.default_rng(seed)
         self.iteration = 0
     
@@ -135,6 +138,13 @@ class SPSAOptimizer:
             Tuple of (updated params, gradient norm).
         """
         gradient = self.compute_gradient(loss_fn, params)
+        grad_norm = np.linalg.norm(gradient)
+        
+        # Gradient clipping for NISQ noise robustness
+        if grad_norm > self.max_grad_norm:
+            gradient = gradient * (self.max_grad_norm / grad_norm)
+            grad_norm = self.max_grad_norm
+        
         a_k = self._get_learning_rate(self.iteration)
         
         # Update parameters
@@ -142,7 +152,7 @@ class SPSAOptimizer:
         
         self.iteration += 1
         
-        return new_params, np.linalg.norm(gradient)
+        return new_params, grad_norm
     
     def optimize(
         self,

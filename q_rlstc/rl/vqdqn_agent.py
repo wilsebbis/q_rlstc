@@ -213,7 +213,12 @@ class VQDQNAgent:
         q_value = q_values[action]
         td_error = target - q_value
         
-        return td_error ** 2
+        # Huber loss: robust to outliers from quantum bit-flip errors
+        delta = 1.0  # Huber delta parameter
+        if abs(td_error) <= delta:
+            return 0.5 * td_error ** 2
+        else:
+            return delta * (abs(td_error) - 0.5 * delta)
     
     def update(
         self,

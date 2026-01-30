@@ -18,8 +18,8 @@ class VQDQNConfig:
     n_qubits: int = 5
     n_layers: int = 2
     use_data_reuploading: bool = True
-    shots_train: int = 512
-    shots_eval: int = 1024
+    shots_train: int = 512   # Low precision, high speed for training
+    shots_eval: int = 4096   # High precision for final metrics
 
 
 @dataclass
@@ -54,7 +54,7 @@ class SPSAConfig:
     """
     A: int = 20
     a: float = 0.12
-    c: float = 0.08
+    c: float = 0.10  # Larger perturbation to overcome shot noise variance
     alpha: float = 0.602
     gamma_spsa: float = 0.101
     seed: int = 42
@@ -73,7 +73,7 @@ class RLConfig:
         memory_size: Maximum replay buffer size.
         target_update_freq: Episodes between target network updates.
     """
-    gamma: float = 0.99
+    gamma: float = 0.90  # Shorter horizon; NISQ noise makes long-term credit unreliable
     epsilon_start: float = 1.0
     epsilon_min: float = 0.1
     epsilon_decay: float = 0.99
