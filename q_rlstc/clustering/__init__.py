@@ -1,7 +1,8 @@
-"""Clustering module for hybrid quantum k-means."""
+"""Clustering module for classical k-means."""
 
-from .hybrid_kmeans import (
-    HybridKMeans,
+from .classical_kmeans import (
+    ClassicalKMeans,
+    KMeansResult,
     kmeans_fit,
 )
 from .metrics import (
@@ -11,7 +12,8 @@ from .metrics import (
 )
 
 __all__ = [
-    "HybridKMeans",
+    "ClassicalKMeans",
+    "KMeansResult",
     "kmeans_fit",
     "overall_distance",
     "silhouette_score",

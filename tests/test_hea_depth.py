@@ -65,7 +65,7 @@ class TestHEADepth:
         assert ops_with.get('ry', 0) > ops_without.get('ry', 0)
     
     def test_variational_rotation_types(self):
-        """Circuit uses RY-RZ-RY rotation sequence"""
+        """Circuit uses RY-RZ rotation sequence (2 per qubit)"""
         builder = VQDQNCircuitBuilder(n_qubits=5, n_layers=1)
         state = np.zeros(5)
         params = np.random.randn(builder.n_total_params)

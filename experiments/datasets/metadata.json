@@ -1,0 +1,42 @@
+{
+  "generated_at": "2026-02-12T18:47:30.128565",
+  "seed": 42,
+  "scale_min": [
+    -907.5235322109878,
+    -1057.6040373969483
+  ],
+  "scale_max": [
+    1075.1604069851337,
+    973.4413467749443
+  ],
+  "datasets": {
+    "small": {
+      "n_trajectories": 20,
+      "n_segments_range": [
+        2,
+        4
+      ]
+    },
+    "medium": {
+      "n_trajectories": 50,
+      "n_segments_range": [
+        2,
+        4
+      ]
+    },
+    "large": {
+      "n_trajectories": 200,
+      "n_segments_range": [
+        2,
+        6
+      ]
+    },
+    "xlarge": {
+      "n_trajectories": 500,
+      "n_segments_range": [
+        2,
+        8
+      ]
+    }
+  }
+}

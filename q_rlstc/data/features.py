@@ -258,6 +258,155 @@ class StateFeatureExtractor:
         ], dtype=np.float32)
 
 
+# Alias for Version A
+StateFeatureExtractorA = StateFeatureExtractor
+
+
+class StateFeatureExtractorB(StateFeatureExtractor):
+    """Extended 8-dimensional state features for Version B (quantum-optimized).
+    
+    Inherits all 5 base features from Version A, then adds:
+      5. angle_spread: Variance of arctan-scaled features (quantum encoding spread)
+      6. curvature_gradient: Rate of change of segment curvature
+      7. segment_density: Points per unit spatial distance in current segment
+    
+    The additional features exploit the 8-qubit circuit's larger Hilbert space
+    and provide richer geometric information.
+    """
+    
+    def _compute_angle_spread(self, base_features: np.ndarray) -> float:
+        """Variance of the angle-encoded feature values.
+        
+        When features are angle-encoded via arctan, the variance of the
+        encoded angles reflects how "spread" the quantum state is across
+        the Bloch sphere. Low spread = qubits near same angle = ambiguous.
+        
+        Args:
+            base_features: The 5D base feature vector.
+        
+        Returns:
+            Variance of arctan-scaled features, in [0, ~1].
+        """
+        angles = 2.0 * np.arctan(base_features)  # Same as circuit encoding
+        return float(np.var(angles))
+    
+    def _compute_curvature_gradient(
+        self,
+        points: List[Point],
+        current_idx: int,
+        split_point: int,
+    ) -> float:
+        """Rate of change of curvature (second-order geometric signal).
+        
+        Captures acceleration of direction change — distinguishes gradual
+        curves from sudden turns. Classical RLSTC uses curvature but not
+        its derivative.
+        
+        Args:
+            points: Trajectory points.
+            current_idx: Current index.
+            split_point: Segment start index.
+        
+        Returns:
+            Curvature gradient, normalized.
+        """
+        segment_len = current_idx - split_point + 1
+        if segment_len < 4:
+            return 0.0
+        
+        # Compute curvature at two windows within the segment
+        mid = split_point + segment_len // 2
+        
+        curv_first = self._compute_segment_curvature(points, split_point, mid)
+        curv_second = self._compute_segment_curvature(points, mid, current_idx)
+        
+        # Normalize by segment length to get rate
+        half_len = max(segment_len / 2, 1.0)
+        gradient = (curv_second - curv_first) / half_len
+        
+        # Sigmoid-like compression to [-1, 1]
+        return float(np.tanh(gradient))
+    
+    def _compute_segment_density(
+        self,
+        points: List[Point],
+        start_idx: int,
+        end_idx: int,
+    ) -> float:
+        """Points per unit spatial distance in current segment.
+        
+        Captures congestion vs free-flow without explicit speed.
+        High density = stop-and-go or slow movement.
+        Low density = fast straight-line movement.
+        
+        Args:
+            points: Trajectory points.
+            start_idx: Segment start.
+            end_idx: Segment end.
+        
+        Returns:
+            Density score (normalized via arctan to [0, 1]).
+        """
+        n_points = end_idx - start_idx + 1
+        if n_points < 2:
+            return 0.5  # Neutral
+        
+        spatial_length = self._compute_segment_length(points, start_idx, end_idx)
+        if spatial_length < 1e-10:
+            return 1.0  # All points at same location = max density
+        
+        density = n_points / spatial_length
+        # Normalize to [0, 1] via arctan
+        return float(2.0 * np.arctan(density) / np.pi)
+    
+    def extract_features(
+        self,
+        trajectory: Trajectory,
+        current_idx: int,
+        split_point: int,
+        current_od: float,
+        n_segments: int,
+    ) -> np.ndarray:
+        """Extract 8-dimensional state features (5 base + 3 quantum-native).
+        
+        Args:
+            trajectory: Current trajectory.
+            current_idx: Current point index.
+            split_point: Index of last split point.
+            current_od: Current overall clustering distance.
+            n_segments: Number of segments created so far.
+        
+        Returns:
+            8-dimensional state vector.
+        """
+        # Get the 5 base features from Version A
+        base = super().extract_features(
+            trajectory, current_idx, split_point, current_od, n_segments
+        )
+        
+        points = trajectory.points
+        
+        # Feature 5: Angle spread of base features
+        angle_spread = self._compute_angle_spread(base)
+        
+        # Feature 6: Curvature gradient
+        curv_gradient = self._compute_curvature_gradient(
+            points, current_idx, split_point
+        )
+        
+        # Feature 7: Segment density
+        seg_density = self._compute_segment_density(
+            points, split_point, current_idx
+        )
+        
+        return np.array([
+            base[0], base[1], base[2], base[3], base[4],
+            angle_spread,
+            curv_gradient,
+            seg_density,
+        ], dtype=np.float32)
+
+
 def extract_state_features(
     trajectory: Trajectory,
     current_idx: int,
@@ -265,6 +414,7 @@ def extract_state_features(
     current_od: float = 0.0,
     n_segments: int = 0,
     n_clusters: int = 10,
+    version: str = "A",
 ) -> np.ndarray:
     """Convenience function to extract state features.
     
@@ -275,11 +425,15 @@ def extract_state_features(
         current_od: Current overall distance.
         n_segments: Number of segments so far.
         n_clusters: Number of clusters for OD estimation.
+        version: "A" for 5D (direct comparison) or "B" for 8D (quantum-optimized).
     
     Returns:
-        5-dimensional state vector.
+        5D (version A) or 8D (version B) state vector.
     """
-    extractor = StateFeatureExtractor(n_clusters=n_clusters)
+    if version.upper() == "B":
+        extractor = StateFeatureExtractorB(n_clusters=n_clusters)
+    else:
+        extractor = StateFeatureExtractor(n_clusters=n_clusters)
     return extractor.extract_features(
         trajectory, current_idx, split_point, current_od, n_segments
     )

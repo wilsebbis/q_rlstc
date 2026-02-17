@@ -1,18 +1,12 @@
-"""Hybrid quantum k-means clustering.
+"""Classical k-means clustering.
 
-Combines:
-- Quantum distance estimation (swap test) for assignments
-- Classical centroid updates (mean of assigned points)
-
-Falls back to classical Euclidean distance when quantum is not available
-or when explicitly configured.
+Pure classical implementation for trajectory segment clustering.
+Used for episode-end evaluation, NOT per-step in RL loop.
 """
 
 import numpy as np
-from typing import Literal, Optional, Tuple, List
+from typing import Optional, Tuple, List
 from dataclasses import dataclass
-
-from qiskit_aer import AerSimulator
 
 
 @dataclass
@@ -33,11 +27,10 @@ class KMeansResult:
     converged: bool
 
 
-class HybridKMeans:
-    """Hybrid quantum-classical k-means clustering.
+class ClassicalKMeans:
+    """Classical k-means clustering using Euclidean distance.
     
-    Uses quantum swap test for distance estimation in assignment step,
-    and classical mean for centroid update step.
+    Standard Lloyd's algorithm for clustering trajectory segments.
     """
     
     def __init__(
@@ -45,48 +38,27 @@ class HybridKMeans:
         n_clusters: int = 10,
         max_iter: int = 50,
         convergence_threshold: float = 0.01,
-        distance_mode: Literal["quantum", "classical"] = "quantum",
-        backend: Optional[AerSimulator] = None,
-        shots: int = 1024,
         seed: int = 42,
     ):
-        """Initialize hybrid k-means.
+        """Initialize classical k-means.
         
         Args:
             n_clusters: Number of clusters (k).
             max_iter: Maximum iterations.
             convergence_threshold: Stop when centroid shift < this.
-            distance_mode: 'quantum' for swap test, 'classical' for Euclidean.
-            backend: Qiskit backend for quantum distance.
-            shots: Shots for quantum distance estimation.
             seed: Random seed for initialization.
         """
         self.n_clusters = n_clusters
         self.max_iter = max_iter
         self.convergence_threshold = convergence_threshold
-        self.distance_mode = distance_mode
-        self.backend = backend or AerSimulator()
-        self.shots = shots
         self.rng = np.random.default_rng(seed)
         
         self.centroids_: Optional[np.ndarray] = None
         self.labels_: Optional[np.ndarray] = None
     
     def _distance(self, x: np.ndarray, y: np.ndarray) -> float:
-        """Compute distance between two vectors.
-        
-        Args:
-            x: First vector.
-            y: Second vector.
-        
-        Returns:
-            Distance estimate.
-        """
-        if self.distance_mode == "quantum":
-            from ..quantum.swaptest_distance import swaptest_distance
-            return swaptest_distance(x, y, self.backend, self.shots)
-        else:
-            return np.linalg.norm(x - y)
+        """Compute Euclidean distance between two vectors."""
+        return float(np.linalg.norm(x - y))
     
     def _distance_matrix(
         self, 
@@ -102,13 +74,13 @@ class HybridKMeans:
         Returns:
             Distance matrix (n x k).
         """
+        # Vectorized for efficiency
         n_samples = len(data)
         n_centroids = len(centroids)
-        distances = np.zeros((n_samples, n_centroids))
         
-        for i in range(n_samples):
-            for j in range(n_centroids):
-                distances[i, j] = self._distance(data[i], centroids[j])
+        # (n, 1, d) - (1, k, d) -> (n, k, d) -> (n, k)
+        diff = data[:, np.newaxis, :] - centroids[np.newaxis, :, :]
+        distances = np.linalg.norm(diff, axis=2)
         
         return distances
     
@@ -135,8 +107,6 @@ class HybridKMeans:
         labels: np.ndarray
     ) -> np.ndarray:
         """Update centroids as mean of assigned points.
-        
-        Classical update step.
         
         Args:
             data: Data points (n x d).
@@ -173,10 +143,10 @@ class HybridKMeans:
         Returns:
             Total distance.
         """
-        total = 0.0
+        total_sq = 0.0
         for i, (point, label) in enumerate(zip(data, labels)):
-            total += self._distance(point, centroids[label]) ** 2
-        return np.sqrt(total / len(data))
+            total_sq += np.linalg.norm(point - centroids[label]) ** 2
+        return float(np.sqrt(total_sq / len(data)))
     
     def _initialize_centroids(self, data: np.ndarray) -> np.ndarray:
         """Initialize centroids using k-means++ style.
@@ -228,6 +198,7 @@ class HybridKMeans:
         labels = self._assign_clusters(data, centroids)
         
         converged = False
+        iteration = 0
         for iteration in range(self.max_iter):
             # Update centroids
             new_centroids = self._update_centroids(data, labels)
@@ -280,9 +251,7 @@ def kmeans_fit(
     data: np.ndarray,
     k: int,
     max_iter: int = 50,
-    distance_mode: Literal["quantum", "classical"] = "quantum",
-    backend: Optional[AerSimulator] = None,
-    shots: int = 1024,
+    seed: int = 42,
 ) -> Tuple[np.ndarray, np.ndarray, float]:
     """Convenience function for k-means clustering.
     
@@ -290,19 +259,15 @@ def kmeans_fit(
         data: Data points (n x d).
         k: Number of clusters.
         max_iter: Maximum iterations.
-        distance_mode: 'quantum' or 'classical'.
-        backend: Qiskit backend.
-        shots: Shots for quantum distance.
+        seed: Random seed.
     
     Returns:
         Tuple of (centroids, labels, objective).
     """
-    kmeans = HybridKMeans(
+    kmeans = ClassicalKMeans(
         n_clusters=k,
         max_iter=max_iter,
-        distance_mode=distance_mode,
-        backend=backend,
-        shots=shots,
+        seed=seed,
     )
     result = kmeans.fit(data)
     return result.centroids, result.labels, result.objective

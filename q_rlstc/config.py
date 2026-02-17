@@ -123,13 +123,22 @@ class QRLSTCConfig:
     """Master configuration for Q-RLSTC.
     
     Combines all sub-configurations into a single object.
+    
+    Attributes:
+        version: "A" (direct comparison, 5 qubits) or "B" (quantum-optimized, 8 qubits).
     """
+    version: str = "A"
     vqdqn: VQDQNConfig = field(default_factory=VQDQNConfig)
     noise: NoiseConfig = field(default_factory=NoiseConfig)
     spsa: SPSAConfig = field(default_factory=SPSAConfig)
     rl: RLConfig = field(default_factory=RLConfig)
     clustering: ClusteringConfig = field(default_factory=ClusteringConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
+    
+    def __post_init__(self):
+        """Auto-adjust settings based on version."""
+        if self.version.upper() == "B":
+            self.vqdqn.n_qubits = 8
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to nested dictionary."""

@@ -1,4 +1,12 @@
-"""Quantum module for VQ-DQN circuits and swap test distance."""
+"""Quantum module for VQ-DQN circuits.
+
+Contains:
+- VQ-DQN circuit builder with angle encoding
+- Backend factory for Aer simulators
+- Readout error mitigation
+
+Note: Swap test was removed. All distance computation is classical.
+"""
 
 from .vqdqn_circuit import (
     build_vqdqn_circuit,
@@ -9,10 +17,6 @@ from .vqdqn_circuit import (
 from .backends import (
     get_backend,
     BackendFactory,
-)
-from .swaptest_distance import (
-    swaptest_distance,
-    SwapTestDistanceEstimator,
 )
 from .mitigation import (
     ReadoutMitigator,
@@ -26,8 +30,6 @@ __all__ = [
     "VQDQNCircuitBuilder",
     "get_backend",
     "BackendFactory",
-    "swaptest_distance",
-    "SwapTestDistanceEstimator",
     "ReadoutMitigator",
     "apply_mitigation",
 ]

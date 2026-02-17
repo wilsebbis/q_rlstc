@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-02-13T11:08:59.471850",
+  "seed": 42,
+  "datasets": {
+    "tdrive": {
+      "scale_min": [
+        109.53416,
+        33.81239
+      ],
+      "scale_max": [
+        120.295,
+        41.04843
+      ],
+      "sizes_prepared": [
+        "small",
+        "medium"
+      ]
+    },
+    "geolife": {
+      "scale_min": [
+        -122.188135,
+        23.000661058
+      ],
+      "scale_max": [
+        120.161949971,
+        48.09306
+      ],
+      "sizes_prepared": [
+        "small",
+        "medium"
+      ]
+    },
+    "porto": {
+      "scale_min": [
+        -8.69607,
+        40.215843
+      ],
+      "scale_max": [
+        -8.435349,
+        41.404194
+      ],
+      "sizes_prepared": [
+        "small",
+        "medium"
+      ]
+    }
+  }
+}

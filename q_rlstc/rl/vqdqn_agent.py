@@ -28,7 +28,8 @@ class AgentConfig:
     """Configuration for VQ-DQN agent.
     
     Attributes:
-        n_qubits: Number of qubits.
+        version: "A" (5 qubits, standard) or "B" (8 qubits, multi-observable).
+        n_qubits: Number of qubits (auto-set from version if not specified).
         n_layers: Number of variational layers.
         gamma: Discount factor.
         epsilon_start: Initial exploration rate.
@@ -38,6 +39,7 @@ class AgentConfig:
         use_double_dqn: Whether to use Double DQN.
         target_update_freq: Episodes between target updates.
     """
+    version: str = "A"
     n_qubits: int = 5
     n_layers: int = 2
     gamma: float = 0.99
@@ -47,6 +49,11 @@ class AgentConfig:
     shots: int = 512
     use_double_dqn: bool = True
     target_update_freq: int = 10
+    
+    def __post_init__(self):
+        """Auto-set n_qubits from version if still at default."""
+        if self.version.upper() == "B" and self.n_qubits == 5:
+            self.n_qubits = 8
 
 
 class VQDQNAgent:
@@ -72,6 +79,10 @@ class VQDQNAgent:
         self.config = config or AgentConfig()
         self.backend = backend or get_backend("ideal")
         self.rng = np.random.default_rng(seed)
+        self.version = self.config.version.upper()
+        
+        # Readout mode based on version
+        self.readout_mode = "multi_observable" if self.version == "B" else "standard"
         
         # Build circuit
         self.circuit_builder = VQDQNCircuitBuilder(
@@ -85,8 +96,9 @@ class VQDQNAgent:
         self.params = self.rng.uniform(-np.pi, np.pi, self.n_params)
         self.target_params = self.params.copy()
         
-        # Output scaling
-        self.output_scale = np.ones(2)
+        # Output scaling — Version B uses 4 weights (2 single + 2 parity)
+        n_scale = 4 if self.version == "B" else 2
+        self.output_scale = np.ones(n_scale)
         self.output_bias = np.zeros(2)
         
         # Exploration
@@ -125,6 +137,7 @@ class VQDQNAgent:
             use_data_reuploading=True,
             output_scale=self.output_scale,
             output_bias=self.output_bias,
+            readout_mode=self.readout_mode,
         )
     
     def act(self, state: np.ndarray, greedy: bool = False) -> int:
@@ -208,6 +221,7 @@ class VQDQNAgent:
             use_data_reuploading=True,
             output_scale=self.output_scale,
             output_bias=self.output_bias,
+            readout_mode=self.readout_mode,
         )
         
         q_value = q_values[action]

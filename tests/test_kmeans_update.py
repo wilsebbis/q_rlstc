@@ -1,4 +1,4 @@
-"""Tests for hybrid k-means centroid update."""
+"""Tests for classical k-means centroid update."""
 
 import numpy as np
 import pytest
@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from q_rlstc.clustering.hybrid_kmeans import HybridKMeans, kmeans_fit
+from q_rlstc.clustering.classical_kmeans import ClassicalKMeans, kmeans_fit
 
 
 class TestCentroidUpdate:
@@ -26,7 +26,7 @@ class TestCentroidUpdate:
         # All in one cluster
         labels = np.array([0, 0, 0, 0])
         
-        kmeans = HybridKMeans(n_clusters=1, distance_mode='classical')
+        kmeans = ClassicalKMeans(n_clusters=1)
         centroid = kmeans._update_centroids(data, labels)
         
         expected = data.mean(axis=0)
@@ -43,7 +43,7 @@ class TestCentroidUpdate:
         
         labels = np.array([0, 0, 1, 1])
         
-        kmeans = HybridKMeans(n_clusters=2, distance_mode='classical')
+        kmeans = ClassicalKMeans(n_clusters=2)
         centroids = kmeans._update_centroids(data, labels)
         
         # Cluster 0 centroid
@@ -64,7 +64,7 @@ class TestCentroidUpdate:
         # Cluster 1 is empty
         labels = np.array([0, 0])
         
-        kmeans = HybridKMeans(n_clusters=2, distance_mode='classical')
+        kmeans = ClassicalKMeans(n_clusters=2)
         centroids = kmeans._update_centroids(data, labels)
         
         # Both centroids should be valid (not NaN)
@@ -82,7 +82,7 @@ class TestKMeansFit:
         cluster2 = np.random.randn(10, 2) + np.array([10, 10])
         data = np.vstack([cluster1, cluster2])
         
-        kmeans = HybridKMeans(n_clusters=2, distance_mode='classical')
+        kmeans = ClassicalKMeans(n_clusters=2)
         result = kmeans.fit(data)
         
         assert result.centroids.shape == (2, 2)
@@ -93,9 +93,7 @@ class TestKMeansFit:
         """kmeans_fit convenience function works"""
         data = np.random.randn(20, 4)
         
-        centroids, labels, objective = kmeans_fit(
-            data, k=3, distance_mode='classical'
-        )
+        centroids, labels, objective = kmeans_fit(data, k=3)
         
         assert centroids.shape == (3, 4)
         assert len(labels) == 20
@@ -110,10 +108,10 @@ class TestObjective:
         np.random.seed(42)
         data = np.random.randn(30, 2)
         
-        kmeans = HybridKMeans(n_clusters=3, max_iter=1, distance_mode='classical')
+        kmeans = ClassicalKMeans(n_clusters=3, max_iter=1)
         result_1 = kmeans.fit(data)
         
-        kmeans2 = HybridKMeans(n_clusters=3, max_iter=10, distance_mode='classical')
+        kmeans2 = ClassicalKMeans(n_clusters=3, max_iter=10)
         result_10 = kmeans2.fit(data)
         
         # More iterations should give same or better objective

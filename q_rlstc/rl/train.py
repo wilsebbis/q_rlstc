@@ -67,9 +67,27 @@ class MDPEnvironment:
     """MDP environment for sub-trajectory segmentation.
     
     State: 5-dimensional feature vector
-    Actions: 0 = extend, 1 = cut (split)
-    Reward: OD improvement from clustering
+        [segment_length, local_variance, centroid_distance, 
+         trajectory_progress, segment_count]
+    
+    Actions: 
+        0 = EXTEND (add next point to current segment)
+        1 = CUT (end current segment, start new one)
+    
+    Termination:
+        - End of trajectory (all points consumed)
+        - Max segments exceeded
+    
+    Anti-Gaming Constraints:
+        - Minimum segment length: CUT disallowed if < MIN_SEGMENT_LEN
+        - Max segments: Episode terminates early if exceeded
+        - Segment penalty: Reward -= λ per segment to prevent over-segmentation
     """
+    
+    # Anti-gaming constants
+    MIN_SEGMENT_LEN = 3   # Minimum points before CUT is allowed
+    MAX_SEGMENTS = 50     # Force termination if exceeded
+    SEGMENT_PENALTY = 0.1 # λ: penalty per new segment
     
     def __init__(
         self,
@@ -100,6 +118,7 @@ class MDPEnvironment:
         self.split_point = 0
         self.segments: List[Tuple[int, int]] = []
         self.current_od = 0.0
+        self.local_variance = 0.0
         self.n_segments = 0
         self.boundaries: List[int] = []
         self.done = False
@@ -125,13 +144,56 @@ class MDPEnvironment:
         coords = np.array([[p.x, p.y] for p in points])
         centroid = coords.mean(axis=0)
         distances = np.linalg.norm(coords - centroid, axis=1)
-        return distances.mean()
+        return float(distances.mean())
+    
+    def _compute_local_variance(self, start: int, end: int) -> float:
+        """Compute variance within current segment."""
+        points = self.trajectory.points[start:end + 1]
+        if len(points) < 2:
+            return 0.0
+        
+        coords = np.array([[p.x, p.y] for p in points])
+        return float(np.var(coords))
+    
+    def _compute_boundary_sharpness(self, boundary_idx: int) -> float:
+        """Compute how 'sharp' a boundary is (direction change)."""
+        if boundary_idx < 1 or boundary_idx >= len(self.trajectory.points) - 1:
+            return 0.0
+        
+        points = self.trajectory.points
+        # Vector before boundary
+        v1 = np.array([
+            points[boundary_idx].x - points[boundary_idx - 1].x,
+            points[boundary_idx].y - points[boundary_idx - 1].y
+        ])
+        # Vector after boundary
+        v2 = np.array([
+            points[boundary_idx + 1].x - points[boundary_idx].x,
+            points[boundary_idx + 1].y - points[boundary_idx].y
+        ])
+        
+        # Angle between vectors (higher = sharper turn = better boundary)
+        norm1, norm2 = np.linalg.norm(v1), np.linalg.norm(v2)
+        if norm1 < 1e-8 or norm2 < 1e-8:
+            return 0.0
+        
+        cos_angle = np.dot(v1, v2) / (norm1 * norm2)
+        cos_angle = np.clip(cos_angle, -1, 1)
+        angle = np.arccos(cos_angle)  # [0, π]
+        
+        # Normalize to [0, 1], higher angle = better boundary
+        return float(angle / np.pi)
+    
+    def _is_cut_allowed(self) -> bool:
+        """Check if CUT action is allowed (anti-gaming)."""
+        current_segment_len = self.current_idx - self.split_point + 1
+        return current_segment_len >= self.MIN_SEGMENT_LEN
     
     def step(self, action: int) -> Tuple[np.ndarray, float, bool]:
         """Execute action and return (next_state, reward, done).
         
-        Action 0: Extend current segment
-        Action 1: Cut (split) and start new segment
+        Action 0: EXTEND - add next point to current segment
+        Action 1: CUT - end current segment, start new one
         
         Args:
             action: 0 or 1.
@@ -142,15 +204,20 @@ class MDPEnvironment:
         if self.done:
             return self._get_state(), 0.0, True
         
-        old_od = self.current_od
+        old_variance = self.local_variance
+        reward = 0.0
         
-        if action == 1:  # Cut
+        # Anti-gaming: enforce minimum segment length
+        if action == 1 and not self._is_cut_allowed():
+            action = 0  # Force EXTEND if segment too short
+        
+        if action == 1:  # CUT
             # End current segment
             segment = (self.split_point, self.current_idx)
             self.segments.append(segment)
             self.boundaries.append(self.current_idx)
             
-            # Update OD
+            # Update OD incrementally
             seg_cost = self._compute_segment_cost(self.split_point, self.current_idx)
             if self.n_segments == 0:
                 self.current_od = seg_cost
@@ -161,13 +228,34 @@ class MDPEnvironment:
                 )
             self.n_segments += 1
             
+            # Reward components for CUT
+            # 1. Boundary sharpness bonus
+            boundary_score = self._compute_boundary_sharpness(self.current_idx)
+            reward += boundary_score * 0.5
+            
+            # 2. Segment penalty (anti-gaming)
+            reward -= self.SEGMENT_PENALTY
+            
             # Start new segment
             self.split_point = self.current_idx + 1
+            self.local_variance = 0.0
+        else:
+            # EXTEND: update local variance
+            self.local_variance = self._compute_local_variance(
+                self.split_point, self.current_idx
+            )
         
         # Move to next point
         self.current_idx += 1
         
-        # Check if episode done
+        # Local delta reward: variance improvement
+        new_variance = self._compute_local_variance(
+            self.split_point, min(self.current_idx, len(self.trajectory.points) - 1)
+        )
+        variance_delta = old_variance - new_variance
+        reward += variance_delta * 0.1  # Small weight for local signal
+        
+        # Check termination conditions
         if self.current_idx >= len(self.trajectory.points) - 1:
             # Force final segment
             if self.split_point < len(self.trajectory.points):
@@ -186,8 +274,11 @@ class MDPEnvironment:
                 self.n_segments += 1
             self.done = True
         
-        # Compute reward
-        reward = od_improvement_reward(old_od, self.current_od, scale=1.0)
+        # Anti-gaming: terminate if too many segments
+        if self.n_segments >= self.MAX_SEGMENTS:
+            self.done = True
+        
+        self.local_variance = new_variance
         
         return self._get_state(), reward, self.done
 
@@ -212,8 +303,12 @@ class Trainer:
         self.dataset = dataset
         self.config = config or QRLSTCConfig()
         
-        # Create agent
+        # Determine version
+        self.version = self.config.version.upper()
+        
+        # Create agent with version-aware config
         agent_config = AgentConfig(
+            version=self.version,
             n_qubits=self.config.vqdqn.n_qubits,
             n_layers=self.config.vqdqn.n_layers,
             gamma=self.config.rl.gamma,
@@ -237,10 +332,16 @@ class Trainer:
             max_size=self.config.rl.memory_size,
         )
         
-        # Feature extractor
-        self.feature_extractor = StateFeatureExtractor(
-            n_clusters=self.config.clustering.n_clusters,
-        )
+        # Feature extractor — Version B uses 8D features
+        if self.version == "B":
+            from ..data.features import StateFeatureExtractorB
+            self.feature_extractor = StateFeatureExtractorB(
+                n_clusters=self.config.clustering.n_clusters,
+            )
+        else:
+            self.feature_extractor = StateFeatureExtractor(
+                n_clusters=self.config.clustering.n_clusters,
+            )
         
         # Statistics
         self.episode_rewards: List[float] = []
