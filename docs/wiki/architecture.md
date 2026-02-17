@@ -1,6 +1,6 @@
 # System Architecture
 
-[← Back to README](../../README_2.md)
+[← Back to README](../../README.md)
 
 ---
 

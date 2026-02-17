@@ -1,6 +1,6 @@
 # RLSTC vs. Q-RLSTC: Technical Comparison
 
-[← Back to README](../../README_2.md) · [Justifications](justifications.md) · **Comparison** · [Noise & Hardware →](noise_and_hardware.md)
+[← Back to README](../../README.md) · [Justifications](justifications.md) · **Comparison** · [Noise & Hardware →](noise_and_hardware.md)
 
 ---
 

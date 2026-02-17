@@ -1,6 +1,6 @@
 # Noise & Hardware Simulation
 
-[← Back to README](../../README_2.md) · [Comparison](comparison.md) · **Noise & Hardware** · [Experimental Design →](experimental_design.md)
+[← Back to README](../../README.md) · [Comparison](comparison.md) · **Noise & Hardware** · [Experimental Design →](experimental_design.md)
 
 ---
 

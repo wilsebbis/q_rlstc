@@ -1,6 +1,6 @@
 # API Reference
 
-[← Back to README](../../README_2.md) · [Debugging](debugging.md) · **API Reference**
+[← Back to README](../../README.md) · [Debugging](debugging.md) · **API Reference**
 
 ---
 

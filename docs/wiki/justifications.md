@@ -1,6 +1,6 @@
 # Classical vs. Quantum Justifications
 
-[← Back to README](../../README_2.md) · [Distance & Clustering](distance_and_clustering.md) · **Justifications** · [Comparison →](comparison.md)
+[← Back to README](../../README.md) · [Distance & Clustering](distance_and_clustering.md) · **Justifications** · [Comparison →](comparison.md)
 
 ---
 

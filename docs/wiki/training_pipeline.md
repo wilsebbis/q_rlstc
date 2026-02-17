@@ -1,6 +1,6 @@
 # Training Pipeline
 
-[← Back to README](../../README_2.md) · [Circuit Design](quantum_circuit.md) · **Training** · [Distance & Clustering →](distance_and_clustering.md)
+[← Back to README](../../README.md) · [Circuit Design](quantum_circuit.md) · **Training** · [Distance & Clustering →](distance_and_clustering.md)
 
 ---
 
