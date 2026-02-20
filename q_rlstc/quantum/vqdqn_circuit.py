@@ -172,7 +172,7 @@ class VQDQNCircuitBuilder:
         Structure:
         1. Angle encoding (RY rotations from state)
         2. For each layer:
-           a. Variational rotations (RY-RZ-RY)
+           a. Variational rotations (RY-RZ)
            b. Entanglement (CNOT chain)
            c. Data re-uploading (if enabled, except last layer)
         3. Measurement

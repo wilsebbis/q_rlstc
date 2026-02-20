@@ -88,7 +88,7 @@ pytest tests/ -v
 
 ```
 q_rlstc/
-├── README_2.md                    ← You are here
+├── README.md                      ← You are here
 ├── pyproject.toml
 ├── q_rlstc/
 │   ├── config.py                  # All configuration dataclasses

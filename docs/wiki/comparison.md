@@ -8,7 +8,10 @@ A side-by-side analysis across 13 dimensions, covering architecture, design deci
 
 ## 1. Architecture Overview
 
-| Dimension | RLSTC | Q-RLSTC |
+> [!IMPORTANT]
+> The "RLSTC" column below describes the **original RLSTC paper's** architecture (SGD, soft-update, single DQN). For **controlled experiments**, the classical MLP baselines intentionally mirror Q-RLSTC's training setup (SPSA, hard-copy, Double DQN) so that the function approximator is the **only** independent variable. See [Experimental Design](experimental_design.md) for the controlled comparison specification.
+
+| Dimension | RLSTC (Original Paper) | Q-RLSTC (This Implementation) |
 |---|---|---|
 | **Policy network** | Classical DQN (TF 1.x / Keras) | VQ-DQN (Qiskit parameterised circuit) |
 | **Optimizer** | SGD (lr = 0.001) | SPSA (gradient-free, NISQ-suitable) |
@@ -99,7 +102,7 @@ Both systems: **binary** — EXTEND (0) or CUT (1). Identical semantics.
 | **Point** | Plain class with `x, y, t` | `@dataclass` with `distance()`, `to_array()` |
 | **Segment** | Class with distance methods | Implicit (index range) |
 | **Trajectory** | `Traj(points, size, ts, te)` | `@dataclass` with `boundaries`, `labels` |
-| **Replay buffer** | `deque(maxlen=2000)` in DQN class | Separate `ReplayBuffer(10000)` |
+| **Replay buffer** | `deque(maxlen=2000)` in DQN class | Separate `ReplayBuffer(5000)` |
 | **Cluster state** | Mutable dict `{id: [data]}` | `@dataclass ClusterState` |
 | **Config** | Hardcoded constants | Nested `@dataclass` hierarchy |
 
@@ -127,7 +130,7 @@ Both systems: **binary** — EXTEND (0) or CUT (1). Identical semantics.
 | Aspect | RLSTC | Q-RLSTC |
 |---|---|---|
 | **Loop** | Iterate points → EXTEND/CUT | Same |
-| **Replay** | Internal to DQN (2,000) | Separate buffer (10,000) |
+| **Replay** | Internal to DQN (2,000) | Separate buffer (5,000) |
 | **Target update** | Soft (τ = 0.05 every batch) | Hard copy every N episodes |
 | **Double DQN** | No | Yes |
 | **Anti-gaming** | `MIN_SEGMENT_LEN` | Same + explicit reward penalty |

@@ -33,6 +33,9 @@ def angle_encode(features, scaling='arctan'):
 - Graceful saturation: extreme values don't cause numerical issues
 - No normalisation required — each feature encoded independently
 
+> [!WARNING]
+> **Saturation at large magnitudes.** Because `arctan` asymptotes at ±π/2, features with large absolute values lose discriminative power: e.g. `arctan(10000) ≈ arctan(20000) ≈ π/2`. If OD features are on the order of thousands, a dataset-dependent scaling factor (e.g. dividing by the feature's observed range or standard deviation) should be applied **before** angle encoding. The code supports `scaling='linear'` and `scaling='sigmoid'` as alternatives if pre-normalised features are available.
+
 **Why _not_ amplitude encoding for the policy?**
 Amplitude encoding would require normalising the state vector (losing magnitude information), more complex prep circuits, and would break parameter-shift gradient computation.
 
@@ -45,6 +48,8 @@ Each variational layer applies:
 ```
 Per qubit i: RY(θ₂ᵢ) → RZ(θ₂ᵢ₊₁)
 ```
+
+2 trainable parameters per qubit per layer (RY + RZ).
 
 ### Entanglement Block — Linear CNOT Chain
 
@@ -65,6 +70,9 @@ Qubit 4: ─RY(θ₈)─RZ(θ₉)──────────X─────�
 - Fewer two-qubit gates = less noise
 - Sufficient expressivity for 5-qubit systems
 - Simpler transpilation to hardware
+
+> [!NOTE]
+> **Ansatz classification.** This RY-RZ-CNOT structure is a two-local ansatz closest to **Circuit 2** in Sim et al. (2019), "Expressibility and entangling capability of parameterized quantum circuits for hybrid quantum-classical algorithms" ([arXiv:1905.10876](https://arxiv.org/abs/1905.10876), Figure 2). Sim et al. show that expressibility increases significantly with depth for this family. It is not a prebuilt `RealAmplitudes` or `TwoLocal` template from Qiskit's circuit library, but could equivalently be constructed as `TwoLocal(rotation_blocks=['ry','rz'], entanglement_blocks='cx', entanglement='linear')`.
 
 ## 3. Data Re-uploading
 
@@ -114,11 +122,13 @@ def compute_expectation_from_counts(counts, shots, qubit_idx, n_qubits):
 
 ## 5. Gates Used
 
-| Gate | Role | Count per Layer |
-|---|---|---|
-| **RY** | Encoding + variational rotation | 2 × n_qubits |
-| **RZ** | Phase rotation (variational) | n_qubits |
-| **CNOT** | Linear entanglement | n_qubits − 1 |
+| Gate | Role | Count (per variational layer) | Count (encoding layer) |
+|---|---|---|---|
+| **RY** | Variational rotation / state encoding | n_qubits | n_qubits |
+| **RZ** | Phase rotation (variational only) | n_qubits | 0 |
+| **CNOT** | Linear entanglement | n_qubits − 1 | 0 |
+
+**Total RY gates in full circuit (2 layers, 1 re-upload):** 3 encoding × n_qubits + 2 variational × n_qubits = 5 × n_qubits = 25 (for 5 qubits). See `_add_encoding_layer` and `_add_variational_layer` in `vqdqn_circuit.py`.
 
 ## 6. Parameter Count
 

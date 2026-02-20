@@ -81,7 +81,7 @@ class NoiseConfig:
 
 | Effect | Mechanism | Mitigation |
 |---|---|---|
-| Q-value variance | Shot noise in expectations | More shots (512→1024) |
+| Q-value variance | Shot noise in expectations | More shots (512→4096 for evaluation) |
 | Gradient noise | SPSA gradient estimate corrupted | Decaying perturbation `cₖ` |
 | Readout bias | Systematic measurement errors | Calibration matrix |
 | Decoherence | T₁/T₂ decay during circuit | Shallow depth (≤11 layers) |

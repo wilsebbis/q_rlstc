@@ -3,6 +3,10 @@
 Gradient-free optimization suitable for variational quantum circuits
 where gradient evaluation is expensive.
 
+Q-RLSTC 2.0: Adds Momentum-SPSA (m-SPSA) for faster convergence
+by tracking a moving average of past gradients, enabling the system
+to "blast through" bad gradient estimations from shot noise.
+
 Based on: J.C. Spall, "An Overview of the Simultaneous Perturbation Method
 for Efficient Optimization" (1998)
 """
@@ -24,6 +28,8 @@ class SPSAConfig:
         gamma: Perturbation decay exponent.
         max_iter: Maximum iterations.
         seed: Random seed.
+        use_momentum: Enable momentum-SPSA (m-SPSA).
+        momentum: Momentum coefficient (β) for gradient averaging.
     """
     A: int = 20
     a: float = 0.12
@@ -32,6 +38,8 @@ class SPSAConfig:
     gamma: float = 0.101
     max_iter: int = 100
     seed: int = 42
+    use_momentum: bool = True
+    momentum: float = 0.9
 
 
 class SPSAOptimizer:
@@ -39,6 +47,11 @@ class SPSAOptimizer:
     
     Uses simultaneous perturbation to estimate gradients with
     only 2 function evaluations per iteration.
+    
+    Q-RLSTC 2.0: Optional momentum-averaged gradients (m-SPSA).
+    When enabled, tracks g̃_k = β·g̃_{k-1} + (1-β)·g_k and uses
+    g̃_k for parameter updates. This smooths out noisy gradient
+    estimates from quantum measurement shot noise.
     """
     
     def __init__(
@@ -50,6 +63,8 @@ class SPSAOptimizer:
         gamma: float = 0.101,
         max_grad_norm: float = 10.0,
         seed: int = 42,
+        use_momentum: bool = False,
+        momentum: float = 0.9,
     ):
         """Initialize SPSA optimizer.
         
@@ -61,6 +76,8 @@ class SPSAOptimizer:
             gamma: Perturbation decay exponent (theory: 1/6, practice: ~0.1).
             max_grad_norm: Maximum gradient norm for clipping (NISQ noise robustness).
             seed: Random seed for perturbations.
+            use_momentum: Enable momentum-SPSA.
+            momentum: Momentum coefficient β (0.9 typical).
         """
         self.A = A
         self.a = a
@@ -70,6 +87,11 @@ class SPSAOptimizer:
         self.max_grad_norm = max_grad_norm
         self.rng = np.random.default_rng(seed)
         self.iteration = 0
+        
+        # Momentum-SPSA (m-SPSA)
+        self.use_momentum = use_momentum
+        self.beta = momentum
+        self._momentum_buffer: Optional[np.ndarray] = None
     
     def _get_learning_rate(self, k: int) -> float:
         """Compute learning rate for iteration k.
@@ -94,16 +116,17 @@ class SPSAOptimizer:
         loss_fn: Callable[[np.ndarray], float],
         params: np.ndarray,
     ) -> np.ndarray:
-        """Estimate gradient using SPSA.
+        """Estimate gradient using SPSA, optionally with momentum.
         
         Uses two-sided finite difference with simultaneous perturbation.
+        If momentum is enabled, returns the exponentially averaged gradient.
         
         Args:
             loss_fn: Function that takes params and returns loss.
             params: Current parameter vector.
         
         Returns:
-            Estimated gradient vector.
+            Estimated gradient vector (momentum-averaged if enabled).
         """
         n_params = len(params)
         c_k = self._get_perturbation_magnitude(self.iteration)
@@ -118,10 +141,20 @@ class SPSAOptimizer:
         loss_plus = loss_fn(params_plus)
         loss_minus = loss_fn(params_minus)
         
-        # Estimate gradient
-        gradient = (loss_plus - loss_minus) / (2 * c_k * delta)
+        # Estimate raw gradient
+        raw_gradient = (loss_plus - loss_minus) / (2 * c_k * delta)
         
-        return gradient
+        # Apply momentum averaging if enabled
+        if self.use_momentum:
+            if self._momentum_buffer is None:
+                self._momentum_buffer = np.zeros(n_params)
+            self._momentum_buffer = (
+                self.beta * self._momentum_buffer +
+                (1 - self.beta) * raw_gradient
+            )
+            return self._momentum_buffer.copy()
+        
+        return raw_gradient
     
     def step(
         self,
@@ -189,8 +222,9 @@ class SPSAOptimizer:
         return params, loss_fn(params)
     
     def reset(self) -> None:
-        """Reset iteration counter."""
+        """Reset iteration counter and momentum buffer."""
         self.iteration = 0
+        self._momentum_buffer = None
 
 
 def spsa_step(

@@ -158,7 +158,7 @@ def main():
             status = "✓ Success" if ratio > 0.8 else "⚠ Degraded"
             print(f"  {name:8}: {ratio:.3f} {status}")
     
-    print("\n### Parameter Efficiency (reward / 30 params)")
+    print("\n### Parameter Efficiency (reward / n_params)")
     for name, result in results.items():
         print(f"  {name:8}: {result.parameter_efficiency:.4f}")
     

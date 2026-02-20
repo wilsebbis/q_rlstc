@@ -54,7 +54,7 @@ class TestTrainingSmokeTest:
         )
         agent = VQDQNAgent(config=config)
         
-        assert agent.n_params == 3 * 3 * 1  # 9 params
+        assert agent.n_params == 3 * 2 * 1  # 6 params
         assert agent.epsilon == 1.0
     
     def test_agent_act(self):

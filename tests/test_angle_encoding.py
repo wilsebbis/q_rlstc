@@ -64,7 +64,7 @@ class TestVQDQNCircuit:
     def test_circuit_uses_5_qubits(self):
         """Default circuit uses 5 qubits"""
         state = np.zeros(5)
-        params = np.random.randn(30)  # 5 * 3 * 2
+        params = np.random.randn(20)  # 5 * 2 * 2
         
         circuit = build_vqdqn_circuit(state, params)
         
@@ -85,7 +85,7 @@ class TestVQDQNCircuit:
     def test_circuit_has_measurements(self):
         """Circuit with measurements has correct count"""
         state = np.zeros(5)
-        params = np.random.randn(30)
+        params = np.random.randn(20)
         
         circuit = build_vqdqn_circuit(state, params, add_measurements=True)
         ops = circuit.count_ops()
@@ -97,7 +97,7 @@ class TestVQDQNCircuit:
         """Correct number of parameters for layers"""
         for n_layers in [1, 2, 3]:
             builder = VQDQNCircuitBuilder(n_qubits=5, n_layers=n_layers)
-            expected = 5 * 3 * n_layers  # 3 rotations per qubit per layer
+            expected = 5 * 2 * n_layers  # 2 rotations per qubit per layer
             assert builder.n_total_params == expected
 
 
@@ -111,7 +111,7 @@ class TestCircuitInfo:
         
         assert info.n_qubits == 5
         assert info.n_layers == 2
-        assert info.n_params == 30
+        assert info.n_params == 20
         assert info.depth > 0
         assert 'ry' in info.gate_counts
 

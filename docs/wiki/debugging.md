@@ -21,7 +21,7 @@
 params = np.random.uniform(-np.pi, np.pi, size=n_params)
 
 # Increase initial learning rate
-spsa_config.a = 0.2  # Default 0.1
+spsa_config.a = 0.2  # Default 0.12
 
 # Verify expectation values manually
 circuit = builder.build(state, params)

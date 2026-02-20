@@ -425,15 +425,91 @@ def extract_state_features(
         current_od: Current overall distance.
         n_segments: Number of segments so far.
         n_clusters: Number of clusters for OD estimation.
-        version: "A" for 5D (direct comparison) or "B" for 8D (quantum-optimized).
+        version: "A" (5D), "B" (8D), "C" (same as A), or "D" (VLDB baseline 5D).
     
     Returns:
-        5D (version A) or 8D (version B) state vector.
+        5D (versions A/C/D) or 8D (version B) state vector.
     """
-    if version.upper() == "B":
+    v = version.upper()
+    if v == "B":
         extractor = StateFeatureExtractorB(n_clusters=n_clusters)
+    elif v == "D":
+        extractor = StateFeatureExtractorD(n_clusters=n_clusters)
     else:
         extractor = StateFeatureExtractor(n_clusters=n_clusters)
     return extractor.extract_features(
         trajectory, current_idx, split_point, current_od, n_segments
     )
+
+
+class StateFeatureExtractorD(StateFeatureExtractor):
+    """VLDB 2024 paper-exact 5-dimensional state features for Version D.
+    
+    Implements the exact state vector from Equation (19) of the paper:
+    
+        s_t = (OD_s, OD_n, OD_b, L_b, L_f)
+    
+    Where:
+        1. **OD_s**: Overall distance including only the current point (if CUT).
+        2. **OD_n**: Overall distance including the next point (if EXTEND).
+        3. **OD_b**: TRACLUS heuristic baseline result (expert knowledge).
+        4. **L_b**: Current sub-trajectory length, normalised by trajectory length.
+        5. **L_f**: Remaining trajectory length, normalised by trajectory length.
+    
+    This is functionally identical to Version A's feature extractor. The key
+    difference in Version D is the *model architecture* (5q × 3 layers = 30 params)
+    and the optional Q-SKIP extension, not the feature vector.
+    
+    The quantum substitution is:
+        Replace the paper's 2-layer FFN (5→64→2 ≈ 514 params) with a VQC
+        that outputs Q(s, EXTEND) and Q(s, CUT) via Z-expectations.
+    
+    Research Variants (NOT baseline, labeled explicitly):
+        - Hilbert curve spatial anchors replacing L_b/L_f
+        - Target network self-play replacing TRACLUS OD_b
+    """
+    
+    def __init__(
+        self,
+        n_clusters: int = 10,
+        window_size: int = 5,
+    ):
+        """Initialize VLDB-aligned extractor.
+        
+        Args:
+            n_clusters: Number of clusters for OD estimation.
+            window_size: Window size for curvature (inherited, unused in D baseline).
+        """
+        super().__init__(n_clusters=n_clusters, window_size=window_size)
+    
+    def extract_features(
+        self,
+        trajectory: Trajectory,
+        current_idx: int,
+        split_point: int,
+        current_od: float,
+        n_segments: int,
+    ) -> np.ndarray:
+        """Extract VLDB paper-exact 5-dimensional state features.
+        
+        State vector: s_t = (OD_s, OD_n, OD_b, L_b, L_f)
+        
+        This is the exact formulation from the paper's Equation (19).
+        The features are identical to Version A — Version D's distinction
+        is the VQC architecture (3 layers, 30 params) and optional Q-SKIP.
+        
+        Args:
+            trajectory: Current trajectory.
+            current_idx: Current point index.
+            split_point: Index of last split point.
+            current_od: Current overall clustering distance.
+            n_segments: Number of segments created so far.
+        
+        Returns:
+            5-dimensional VLDB-aligned state vector.
+        """
+        # Delegate to parent — the paper's features ARE our Version A features
+        return super().extract_features(
+            trajectory, current_idx, split_point, current_od, n_segments
+        )
+

@@ -61,9 +61,9 @@ where:
 
 ```python
 class SPSAOptimizer:
-    a: float = 0.1          # Initial step size
-    c: float = 0.1          # Initial perturbation size
-    A: float = 10.0         # Step size offset (stabilises early training)
+    a: float = 0.12         # Initial step size
+    c: float = 0.10         # Initial perturbation size (larger to overcome shot noise)
+    A: int   = 20           # Step size offset (stabilises early training)
     alpha: float = 0.602    # Step size decay rate (standard SPSA theory)
     gamma: float = 0.101    # Perturbation decay rate
 ```
@@ -108,10 +108,10 @@ def compute_target(reward, next_state, done):
 
 ## Target Network Updates
 
-| Strategy | Mechanism | Default |
-|---|---|---|
-| **Soft update** | `θ_target ← τ·θ_online + (1−τ)·θ_target` after each step | τ = 0.01 |
-| **Hard copy** | `θ_target ← θ_online` every N episodes | N = 10 |
+| Strategy | Used By | Mechanism | Default |
+|---|---|---|---|
+| **Soft update** | RLSTC (original paper) | `θ_target ← τ·θ_online + (1−τ)·θ_target` after each step | τ = 0.05 |
+| **Hard copy** | **Q-RLSTC (this implementation)** | `θ_target ← θ_online` every N episodes | N = 10 |
 
 ## Experience Replay
 
@@ -127,7 +127,7 @@ class Experience:
     done: bool
 
 class ReplayBuffer:
-    buffer: deque(maxlen=10_000)
+    buffer: deque(maxlen=5_000)
     # Uniform random sampling (no prioritised replay)
 ```
 
@@ -145,12 +145,12 @@ Training only starts when the buffer has `≥ batch_size` samples.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `gamma` | 0.99 | Discount factor |
+| `gamma` | 0.90 | Discount factor (shorter horizon; NISQ noise makes long-term credit unreliable) |
 | `batch_size` | 32 | Replay batch size |
-| `memory_size` | 10,000 | Replay buffer capacity |
+| `memory_size` | 5,000 | Replay buffer capacity |
 | `target_update_freq` | 10 | Episodes between target sync (hard) |
 | `shots_train` | 512 | Measurement shots during training |
-| `shots_eval` | 1024 | Measurement shots during evaluation |
+| `shots_eval` | 4,096 | Measurement shots during evaluation |
 
 ---
 

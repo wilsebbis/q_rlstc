@@ -28,9 +28,9 @@
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `a` | `float` | 0.1 | Initial step size |
-| `c` | `float` | 0.1 | Initial perturbation size |
-| `A` | `float` | 10.0 | Step size offset |
+| `a` | `float` | 0.12 | Initial step size |
+| `c` | `float` | 0.10 | Initial perturbation size |
+| `A` | `int` | 20 | Step size offset |
 | `alpha` | `float` | 0.602 | Step size decay exponent |
 | `gamma` | `float` | 0.101 | Perturbation decay exponent |
 
@@ -38,12 +38,12 @@
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `gamma` | `float` | 0.99 | Discount factor |
+| `gamma` | `float` | 0.90 | Discount factor (shorter horizon; NISQ noise makes long-term credit unreliable) |
 | `epsilon_start` | `float` | 1.0 | Initial exploration rate |
 | `epsilon_min` | `float` | 0.1 | Minimum exploration rate |
 | `epsilon_decay` | `float` | 0.99 | Per-episode decay |
 | `batch_size` | `int` | 32 | Replay sampling batch size |
-| `memory_size` | `int` | 10000 | Replay buffer capacity |
+| `memory_size` | `int` | 5000 | Replay buffer capacity |
 | `target_update_freq` | `int` | 10 | Episodes between target sync |
 
 ### `ClusteringConfig`

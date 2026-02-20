@@ -42,7 +42,7 @@ class AgentConfig:
     version: str = "A"
     n_qubits: int = 5
     n_layers: int = 2
-    gamma: float = 0.99
+    gamma: float = 0.90
     epsilon_start: float = 1.0
     epsilon_min: float = 0.1
     epsilon_decay: float = 0.99
