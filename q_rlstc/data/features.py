@@ -428,13 +428,15 @@ def extract_state_features(
         version: "A" (5D), "B" (8D), "C" (same as A), or "D" (VLDB baseline 5D).
     
     Returns:
-        5D (versions A/C/D) or 8D (version B) state vector.
+        5D (versions A/C/D/classical_exact) or 8D (version B) state vector.
     """
     v = version.upper()
     if v == "B":
         extractor = StateFeatureExtractorB(n_clusters=n_clusters)
     elif v == "D":
         extractor = StateFeatureExtractorD(n_clusters=n_clusters)
+    elif v == "CLASSICAL_EXACT":
+        extractor = StateFeatureExtractorClassicalExact(n_clusters=n_clusters)
     else:
         extractor = StateFeatureExtractor(n_clusters=n_clusters)
     return extractor.extract_features(
@@ -513,3 +515,89 @@ class StateFeatureExtractorD(StateFeatureExtractor):
             trajectory, current_idx, split_point, current_od, n_segments
         )
 
+
+class StateFeatureExtractorClassicalExact(StateFeatureExtractor):
+    """RLSTCcode-exact 5-dimensional state features for cross-comparison.
+    
+    Replicates the EXACT state vector from RLSTCcode's MDP.py (lines 74,
+    114, 151) so that experiments comparing Q-RLSTC vs classical RLSTC
+    differ ONLY in the function approximator (VQC vs MLP).
+    
+    RLSTCcode state vector::
+    
+        [overall_sim, split_overdist, overall_sim * 10, L_b, L_f]
+    
+    Where:
+        - overall_sim: Current overall distance (running average of cluster
+          distances across all sub-trajectories processed so far).
+        - split_overdist: Projected OD if we split at the current point.
+        - overall_sim * 10: Simply OD × 10 (a scaling heuristic, NOT
+          TRACLUS MDL).  This is the key difference from Version A.
+        - L_b: ``(index - split_point + 2) / traj_length`` (backward).
+        - L_f: ``(traj_length - (index + 1)) / traj_length`` (forward).
+    
+    Note:
+        The ``+2`` offset in L_b matches the original code exactly.
+    """
+    
+    def __init__(
+        self,
+        n_clusters: int = 10,
+        window_size: int = 5,
+    ):
+        super().__init__(n_clusters=n_clusters, window_size=window_size)
+    
+    def extract_features(
+        self,
+        trajectory: Trajectory,
+        current_idx: int,
+        split_point: int,
+        current_od: float,
+        n_segments: int,
+        split_overdist: Optional[float] = None,
+    ) -> np.ndarray:
+        """Extract RLSTCcode-exact 5-dimensional state features.
+        
+        Args:
+            trajectory: Current trajectory.
+            current_idx: Current point index.
+            split_point: Index of last split point.
+            current_od: Current overall distance (overall_sim).
+            n_segments: Number of segments created so far.
+            split_overdist: Projected OD after split.  If None, uses
+                the parent's OD proxy as fallback.
+        
+        Returns:
+            5-dimensional state vector matching RLSTCcode exactly.
+        """
+        total_length = len(trajectory.points)
+        
+        # Feature 0: overall_sim (current OD)
+        overall_sim = current_od
+        
+        # Feature 1: split_overdist (projected OD after splitting)
+        if split_overdist is not None:
+            feat_split_overdist = split_overdist
+        else:
+            # Fallback: use OD proxy from parent class
+            segment_points = trajectory.points[split_point:current_idx + 1]
+            feat_split_overdist = self._compute_od_proxy(
+                segment_points, current_od, n_segments
+            )
+        
+        # Feature 2: overall_sim * 10 (RLSTCcode's scaling heuristic)
+        feat_od_scaled = overall_sim * 10.0
+        
+        # Feature 3: L_b — RLSTCcode uses (index - split_point + 2) / length
+        len_backward = (current_idx - split_point + 2) / total_length
+        
+        # Feature 4: L_f — (length - (index + 1)) / length
+        len_forward = (total_length - (current_idx + 1)) / total_length
+        
+        return np.array([
+            overall_sim,
+            feat_split_overdist,
+            feat_od_scaled,
+            len_backward,
+            len_forward,
+        ], dtype=np.float32)

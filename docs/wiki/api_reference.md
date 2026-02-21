@@ -10,10 +10,10 @@
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `n_qubits` | `int` | 5 | Qubits in VQ-DQN (5 for A, 8 for B) |
-| `n_layers` | `int` | 2 | Variational layers |
-| `n_actions` | `int` | 2 | Action space size (EXTEND, CUT) |
-| `readout_mode` | `str` | `"standard"` | `"standard"` or `"multi_observable"` |
+| `n_qubits` | `int` | 5 | Qubits in VQ-DQN (5 for A/D, 8 for B, 6 for C) |
+| `n_layers` | `int` | 2 | Variational layers (3 for Version D) |
+| `n_actions` | `int` | 2 | Action space size (2 for A/B/D, 3 for C) |
+| `readout_mode` | `str` | `"standard"` | `"standard"` (A/D), `"multi_observable"` (B), `"softmax"` (C) |
 
 ### `NoiseConfig`
 
@@ -33,12 +33,13 @@
 | `A` | `int` | 20 | Step size offset |
 | `alpha` | `float` | 0.602 | Step size decay exponent |
 | `gamma` | `float` | 0.101 | Perturbation decay exponent |
+| `momentum` | `float` | 0.0 | EMA momentum (0.9 for m-SPSA in Version C) |
 
 ### `RLConfig`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `gamma` | `float` | 0.90 | Discount factor (shorter horizon; NISQ noise makes long-term credit unreliable) |
+| `gamma` | `float` | 0.90 | Discount factor |
 | `epsilon_start` | `float` | 1.0 | Initial exploration rate |
 | `epsilon_min` | `float` | 0.1 | Minimum exploration rate |
 | `epsilon_decay` | `float` | 0.99 | Per-episode decay |
@@ -61,7 +62,7 @@ Top-level config that composes all sub-configs:
 ```python
 @dataclass
 class QRLSTCConfig:
-    version: str = "A"                    # "A" or "B"
+    version: str = "A"                    # "A", "B", "C", or "D"
     vqdqn: VQDQNConfig = field(default_factory=VQDQNConfig)
     noise: NoiseConfig = field(default_factory=NoiseConfig)
     spsa: SPSAConfig = field(default_factory=SPSAConfig)
@@ -106,7 +107,7 @@ class QRLSTCConfig:
 | Method | Signature | Description |
 |---|---|---|
 | `reset` | `(trajectory: Trajectory) → ndarray` | Reset environment for new trajectory |
-| `step` | `(action: int) → (state, reward, done)` | Execute EXTEND or CUT |
+| `step` | `(action: int) → (state, reward, done)` | Execute EXTEND, CUT, DROP, or SKIP |
 | `get_segments` | `() → list[list[Point]]` | Current segmentation |
 
 ### `train`
@@ -171,6 +172,68 @@ class Experience:
 |---|---|---|
 | `compute` | `(trajectory, current_idx, segments, cluster_state) → ndarray[8]` | 8D state vector |
 
+### `StateFeatureExtractorClassicalExact` (Version D)
+
+| Method | Signature | Description |
+|---|---|---|
+| `compute` | `(trajectory, current_idx, segments, cluster_state) → ndarray[5]` | 5D VLDB-exact: `[OD_s, OD_n, OD_b, L_b, L_f]` |
+
+---
+
+## Trajectory Distance — [`clustering/trajdistance.py`](../../q_rlstc/clustering/trajdistance.py)
+
+### Core IED Functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `traj2traj_ied` | `(pts1: List[Point], pts2: List[Point]) → float` | Full IED between two trajectories |
+| `incremental_ied` | `(traj1, traj2, k_dict, k, i, sp_i) → dict` | Incremental IED update (O(1) per step) |
+| `incremental_mindist` | `(traj_pts, start, curr, k_dict, cluster_dict) → (dist, id)` | Nearest cluster via incremental IED |
+| `line2line_ied` | `(p1s, p1e, p2s, p2e) → float` | Segment-pair distance |
+| `get_static_ied` | `(points, x, y, t1, t2) → float` | Static point-to-trajectory IED |
+| `timed_traj` | `(points, ts, te) → Optional[Trajectory]` | Time-windowed sub-trajectory extraction |
+
+### MDL Cost
+
+| Function | Signature | Description |
+|---|---|---|
+| `traj_mdl_comp` | `(points, start_index, curr_index, mode) → float` | MDL cost ("simp" or "orign" mode) |
+
+### Distance Classes
+
+| Class | Method | Description |
+|---|---|---|
+| `FrechetDistance` | `compute(traj_c, traj_q) → float` | Discrete Fréchet distance |
+| `DtwDistance` | `compute(traj_c, traj_q) → float` | Dynamic Time Warping distance |
+
+---
+
+## Pickle Data Loader — [`clustering/pickle_loader.py`](../../q_rlstc/clustering/pickle_loader.py)
+
+| Function | Signature | Description |
+|---|---|---|
+| `load_trajectories` | `(path, limit=None) → List[Trajectory]` | Load pre-processed trajectories |
+| `load_raw_trajectories` | `(path, limit=None) → list` | Load as raw RLSTCcode Traj objects |
+| `load_cluster_centers` | `(path) → (Dict, float)` | Load cluster centers (Q-RLSTC format) |
+| `load_cluster_centers_raw` | `(path) → (Dict, float)` | Load in MDP.py's native dict format |
+| `load_subtrajectories` | `(path) → List[Trajectory]` | Load TRACLUS sub-trajectories |
+| `load_test_set` | `(path) → List[Trajectory]` | Load held-out test/validation sets |
+| `list_available_datasets` | `() → Dict[str, List[str]]` | List available pickle files in data dir |
+
+---
+
+## MDL Preprocessing — [`data/preprocessing.py`](../../q_rlstc/data/preprocessing.py)
+
+| Function | Signature | Description |
+|---|---|---|
+| `simplify_trajectory` | `(trajectory: Trajectory) → Trajectory` | Greedy MDL-based simplification |
+| `simplify_all` | `(trajectories) → List[Trajectory]` | Simplify all trajectories |
+| `preprocess_tdrive` | `(raw, max_len, min_len, simplify) → List[Trajectory]` | Full pipeline |
+| `filter_by_coordinates` | `(trajs, lon_range, lat_range) → list` | Geographic bounding box filter |
+| `normalize_locations` | `(trajs) → list` | Z-score normalize spatial coords |
+| `normalize_time` | `(trajs) → list` | Z-score normalize timestamps |
+| `arrays_to_trajectories` | `(data) → List[Trajectory]` | Convert [lon,lat,time] → Trajectory |
+
 ---
 
 ## Clustering — [`clustering/`](../../q_rlstc/clustering/)
@@ -181,6 +244,16 @@ class Experience:
 |---|---|---|
 | `fit` | `(data: ndarray) → KMeansResult` | Run k-means++ |
 | `predict` | `(data: ndarray) → ndarray` | Assign clusters |
+
+### Incremental Cluster Management — [`classical_kmeans.py`](../../q_rlstc/clustering/classical_kmeans.py)
+
+| Function | Signature | Description |
+|---|---|---|
+| `add_to_cluster` | `(cluster_dict, id, sub_traj, dist)` | Add sub-trajectory to cluster |
+| `compute_center` | `(cluster_dict, id) → List[Point]` | Recompute center from time-indexed points |
+| `update_all_centers` | `(cluster_dict)` | Update all centers, reset accumulators |
+| `compute_overdist` | `(cluster_dict) → float` | Compute overall distance |
+| `initialize_cluster_dict` | `(n_clusters, centers) → Dict` | Create empty cluster dict |
 
 ### Metrics — [`metrics.py`](../../q_rlstc/clustering/metrics.py)
 
@@ -237,3 +310,23 @@ class Trajectory:
     boundaries: list[int]      # Ground truth boundary indices
     labels: list[str]          # Behaviour type per segment
 ```
+
+---
+
+## Experiments — [`experiments/`](../../experiments/)
+
+### `run_cross_comparison.py`
+
+```python
+# Run both classical and quantum arms on same data
+python experiments/run_cross_comparison.py \
+    --traj-path ../RLSTCcode/data/Tdrive_norm_traj \
+    --centers-path ../RLSTCcode/data/tdrive_clustercenter \
+    --amount 500 --run both
+```
+
+### `data_bridge.py`
+
+| Function | Description |
+|---|---|
+| `convert_rlstc_to_qrlstc(traj_path, centers_path, amount)` | Convert RLSTCcode pickle → Q-RLSTC Trajectory objects |

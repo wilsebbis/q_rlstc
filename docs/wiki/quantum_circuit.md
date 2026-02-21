@@ -39,11 +39,13 @@ def angle_encode(features, scaling='arctan'):
 **Why _not_ amplitude encoding for the policy?**
 Amplitude encoding would require normalising the state vector (losing magnitude information), more complex prep circuits, and would break parameter-shift gradient computation.
 
-## 2. Variational Layers — Hardware-Efficient Ansatz (HEA)
+## 2. Variational Layers
+
+### Version A/B/D — Hardware-Efficient Ansatz (HEA)
 
 Each variational layer applies:
 
-### Rotation Block
+#### Rotation Block
 
 ```
 Per qubit i: RY(θ₂ᵢ) → RZ(θ₂ᵢ₊₁)
@@ -51,7 +53,7 @@ Per qubit i: RY(θ₂ᵢ) → RZ(θ₂ᵢ₊₁)
 
 2 trainable parameters per qubit per layer (RY + RZ).
 
-### Entanglement Block — Linear CNOT Chain
+#### Entanglement Block — Linear CNOT Chain
 
 ```
 Qubit 0: ─RY(θ₀)─RZ(θ₁)─●────────────────────────
@@ -68,11 +70,24 @@ Qubit 4: ─RY(θ₈)─RZ(θ₉)──────────X─────�
 **Linear entanglement** (vs. ring or full) is chosen for:
 - Lower circuit depth
 - Fewer two-qubit gates = less noise
-- Sufficient expressivity for 5-qubit systems
+- Sufficient expressivity for 5–8 qubit systems
 - Simpler transpilation to hardware
 
+### Version C — Equivariant Quantum Circuit (EQC)
+
+Version C uses an SO(2)-equivariant circuit designed to respect the rotational symmetry of GPS coordinate data:
+
+```
+Per qubit i: RZ(θᵢ)        — Phase rotation only (preserves equivariance)
+
+Entanglement: Circular CNOT ring
+    qubit 0 → qubit 1 → qubit 2 → ... → qubit N-1 → qubit 0
+```
+
+This results in ~24 parameters with a more constrained (but symmetry-appropriate) structure.
+
 > [!NOTE]
-> **Ansatz classification.** This RY-RZ-CNOT structure is a two-local ansatz closest to **Circuit 2** in Sim et al. (2019), "Expressibility and entangling capability of parameterized quantum circuits for hybrid quantum-classical algorithms" ([arXiv:1905.10876](https://arxiv.org/abs/1905.10876), Figure 2). Sim et al. show that expressibility increases significantly with depth for this family. It is not a prebuilt `RealAmplitudes` or `TwoLocal` template from Qiskit's circuit library, but could equivalently be constructed as `TwoLocal(rotation_blocks=['ry','rz'], entanglement_blocks='cx', entanglement='linear')`.
+> **Ansatz classification.** The HEA RY-RZ-CNOT structure is a two-local ansatz closest to **Circuit 2** in Sim et al. (2019), "Expressibility and entangling capability of parameterized quantum circuits for hybrid quantum-classical algorithms" ([arXiv:1905.10876](https://arxiv.org/abs/1905.10876), Figure 2). The EQC in Version C is custom-designed for spatial data invariance.
 
 ## 3. Data Re-uploading
 
@@ -107,6 +122,25 @@ Q(CUT)    = w₂·⟨Z₁⟩ + w₃·⟨Z₄Z₅⟩
 
 Parity observables `⟨ZₐZᵦ⟩` capture two-qubit correlations, enabling richer output encoding.
 
+### Version C — Softmax Distribution
+
+```python
+# Full distribution from all measurement probabilities
+π(EXTEND|s) = softmax(f(counts))[0]
+π(CUT|s)    = softmax(f(counts))[1]
+π(DROP|s)   = softmax(f(counts))[2]
+```
+
+SAC agent samples actions from this distribution and uses entropy regularisation.
+
+### Version D — Multi-Qubit Z Readout
+
+```python
+Q(EXTEND) = ⟨Z₀⟩ × scale₀ + bias₀
+Q(CUT)    = ⟨Z₁⟩ × scale₁ + bias₁
+Q(SKIP)   = ⟨Z₂⟩ × scale₂ + bias₂   # Optional, when SKIP enabled
+```
+
 ### Expectation Computation
 
 ```python
@@ -125,19 +159,17 @@ def compute_expectation_from_counts(counts, shots, qubit_idx, n_qubits):
 | Gate | Role | Count (per variational layer) | Count (encoding layer) |
 |---|---|---|---|
 | **RY** | Variational rotation / state encoding | n_qubits | n_qubits |
-| **RZ** | Phase rotation (variational only) | n_qubits | 0 |
-| **CNOT** | Linear entanglement | n_qubits − 1 | 0 |
-
-**Total RY gates in full circuit (2 layers, 1 re-upload):** 3 encoding × n_qubits + 2 variational × n_qubits = 5 × n_qubits = 25 (for 5 qubits). See `_add_encoding_layer` and `_add_variational_layer` in `vqdqn_circuit.py`.
+| **RZ** | Phase rotation (variational only) | n_qubits (HEA) / n_qubits (EQC) | 0 |
+| **CNOT** | Entanglement | n_qubits − 1 (linear) / n_qubits (circular, C) | 0 |
 
 ## 6. Parameter Count
 
-| Component | Version A (5 qubits) | Version B (8 qubits) |
-|---|---|---|
-| Encoding angles | 5 (fixed, not trained) | 8 (fixed) |
-| Rotations per layer | 10 (5 × 2) | 16 (8 × 2) |
-| Layers | 2 | 2 |
-| **Total trainable** | **20** | **32** |
+| Component | Version A (5q) | Version B (8q) | Version C (6q) | Version D (5q) |
+|---|---|---|---|---|
+| Encoding angles | 5 (fixed) | 8 (fixed) | 6 (fixed) | 5 (fixed) |
+| Rotations per layer | 10 (5×2) | 16 (8×2) | ~12 | 10 (5×2) |
+| Layers | 2 | 2 | 2 | 3 |
+| **Total trainable** | **20** | **32** | **~24** | **30** |
 
 Compare to classical RLSTC: ~450 parameters in a 5→64→2 MLP.
 
@@ -149,12 +181,15 @@ Compare to classical RLSTC: ~450 parameters in a 5→64→2 MLP.
 | Variational layer 1 | ~4 (rotations + CNOT chain) |
 | Re-encoding | 1 |
 | Variational layer 2 | ~4 |
+| (Version D: layer 3) | ~4 |
 | Measurement | 1 |
-| **Total** | **~11** |
+| **Total (A/B)** | **~11** |
+| **Total (C)** | **~9** (EQC is more compact) |
+| **Total (D)** | **~15** (3 variational layers) |
 
 This shallow depth keeps the circuit within the coherence time of:
-- **IBM Eagle** (~100μs T₂): Estimated fidelity ~85%
-- **IBM Heron** (~200μs T₂): Estimated fidelity ~95%
+- **IBM Eagle** (~100μs T₂): Estimated fidelity ~85% (A/B), ~80% (D)
+- **IBM Heron** (~200μs T₂): Estimated fidelity ~95% (A/B), ~90% (D)
 
 ## The Encoding Dichotomy
 

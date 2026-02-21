@@ -271,3 +271,154 @@ def kmeans_fit(
     )
     result = kmeans.fit(data)
     return result.centroids, result.labels, result.objective
+
+
+# ============================================================================
+# Incremental cluster management (matching RLSTCcode's cluster.py)
+# ============================================================================
+# These functions operate on the "cluster_dict" data structure used by
+# RLSTCcode's MDP:
+#
+#   cluster_dict[k] = [
+#       distances_list,       # [0] per-segment distances
+#       segment_trajs,        # [1] list of sub-trajectory Traj objects
+#       center_points,        # [2] center trajectory points (List[Point])
+#       time_indexed_points,  # [3] defaultdict(list) — points indexed by time
+#   ]
+#
+# The overall distance (OD) = sum(all distances) / count(all segments).
+
+from collections import defaultdict
+from typing import Dict, Any
+
+from ..data.synthetic import Point, Trajectory
+
+
+def add_to_cluster(
+    cluster_dict: Dict[int, list],
+    cluster_id: int,
+    sub_traj: Trajectory,
+    distance: float,
+) -> None:
+    """Add a sub-trajectory to a cluster (incremental assignment).
+
+    Matches RLSTCcode's ``cluster.add2clusdict``.
+
+    Args:
+        cluster_dict: The cluster dictionary.
+        cluster_id: Target cluster.
+        sub_traj: Sub-trajectory to add.
+        distance: IED distance to cluster center.
+    """
+    if cluster_id not in cluster_dict:
+        cluster_dict[cluster_id] = [[], [], [], defaultdict(list)]
+
+    cluster_dict[cluster_id][0].append(distance)
+    cluster_dict[cluster_id][1].append(sub_traj)
+
+    # Index points by time bucket for center recomputation
+    for p in sub_traj.points:
+        t_key = round(p.t, 6)
+        cluster_dict[cluster_id][3][t_key].append(p)
+
+
+def compute_center(cluster_dict: Dict[int, list], cluster_id: int) -> List[Point]:
+    """Recompute cluster center from time-indexed points.
+
+    Matches RLSTCcode's ``cluster.computecenter``.  Averages all points
+    at each time bucket and produces a new center trajectory.
+
+    Args:
+        cluster_dict: The cluster dictionary.
+        cluster_id: Cluster to recompute.
+
+    Returns:
+        New center as a list of Points (sorted by time).
+    """
+    time_points = cluster_dict[cluster_id][3]
+    if not time_points:
+        return cluster_dict[cluster_id][2]  # Return existing center
+
+    center_pts = []
+    for t_key in sorted(time_points.keys()):
+        pts = time_points[t_key]
+        if len(pts) == 0:
+            continue
+        avg_x = np.mean([p.x for p in pts])
+        avg_y = np.mean([p.y for p in pts])
+        center_pts.append(Point(x=float(avg_x), y=float(avg_y), t=float(t_key)))
+
+    return center_pts
+
+
+def update_all_centers(cluster_dict: Dict[int, list]) -> None:
+    """Update all cluster centers and reset segment lists.
+
+    Called at the end of each training round (after all episodes in the
+    round have been processed).  Matches RLSTCcode's ``update_centers``.
+
+    Args:
+        cluster_dict: The cluster dictionary (modified in-place).
+    """
+    for k in list(cluster_dict.keys()):
+        if cluster_dict[k][3]:
+            new_center = compute_center(cluster_dict, k)
+            if len(new_center) > 0:
+                cluster_dict[k][2] = new_center
+
+        # Reset per-round accumulators
+        cluster_dict[k][0] = []  # distances
+        cluster_dict[k][1] = []  # segments
+        cluster_dict[k][3] = defaultdict(list)  # time-indexed points
+
+
+def compute_overdist(cluster_dict: Dict[int, list]) -> float:
+    """Compute overall distance (OD) from cluster dictionary.
+
+    OD = sum(all_distances) / count(all_segments)
+
+    Matches RLSTCcode's ``cluster.compute_overdist``.
+
+    Args:
+        cluster_dict: The cluster dictionary.
+
+    Returns:
+        Overall distance. Returns 1e10 if no segments.
+    """
+    total_dist = 0.0
+    total_count = 0
+
+    for k in cluster_dict:
+        dists = cluster_dict[k][0]
+        total_dist += sum(dists)
+        total_count += len(dists)
+
+    if total_count == 0:
+        return 1e10
+
+    return total_dist / total_count
+
+
+def initialize_cluster_dict(
+    n_clusters: int,
+    center_points: Optional[Dict[int, List[Point]]] = None,
+) -> Dict[int, list]:
+    """Create an empty cluster dictionary.
+
+    Args:
+        n_clusters: Number of clusters.
+        center_points: Optional pre-computed center points per cluster.
+
+    Returns:
+        Initialized cluster dictionary.
+    """
+    cluster_dict: Dict[int, list] = {}
+    for k in range(n_clusters):
+        centers = center_points[k] if center_points and k in center_points else []
+        cluster_dict[k] = [
+            [],              # [0] distances
+            [],              # [1] segment trajs
+            centers,         # [2] center points
+            defaultdict(list),  # [3] time-indexed points
+        ]
+    return cluster_dict

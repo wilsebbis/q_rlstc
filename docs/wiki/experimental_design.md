@@ -23,6 +23,8 @@ If the quantum and classical implementations differ in anything beyond the funct
 | Optimizer | SPSA (same hyperparams) | SPSA (same hyperparams) | ✅ |
 | Loss | Huber (δ=1.0) | Huber (δ=1.0) | ✅ |
 | Dataset | Same seed | Same seed | ✅ |
+| Distance metric | IED (trajdistance.py) | IED (trajdistance.py) | ✅ |
+| Preprocessing | MDL simplification | MDL simplification | ✅ |
 
 ### Common Pitfalls
 
@@ -34,6 +36,7 @@ If the quantum and classical implementations differ in anything beyond the funct
 | Different shot counts | Added noise is an uncontrolled variable |
 | Different random seeds | Trajectory order and exploration path differ |
 | Quantum with noise, classical without | Measuring noise tolerance, not approximation quality |
+| Different distance metrics | IED vs. OD proxy produces different reward signals |
 
 ## Classical Baselines
 
@@ -42,8 +45,9 @@ If the quantum and classical implementations differ in anything beyond the funct
 | **A: Parameter-matched** | 5→4→2 MLP | 30 | Quantum gains from structure or just right param count? |
 | **B: Architecture-matched** | 5→64→2 MLP | ~450 | Classical ceiling — how well can unconstrained classical do? |
 | **C: Linear** | 5→2 | 12 | Is the problem trivially linear? |
+| **D: RLSTCcode direct** | 5→64→2 MLP (TF/Keras) | ~450 | Original paper implementation for ground truth |
 
-**Critical:** All controls use SPSA (not SGD/Adam with backprop).
+**Critical:** Controls A–C use SPSA (not SGD/Adam with backprop). Control D uses original SGD.
 
 ## Primary Metrics
 
@@ -75,15 +79,37 @@ If the quantum and classical implementations differ in anything beyond the funct
 | **E3** | 128, 256, 512, 1024, 4096 shots | VQ-DQN ideal | Noise floor |
 | **E4** | 1, 2, 3 variational layers | Same qubit count | Expressivity vs. noise |
 | **E5** | 2, 4, 8, 16 true boundaries | All systems | Dataset scaling |
+| **E6** | Version A vs. B vs. C vs. D | Ideal backend | Version comparison |
+| **E7** | Q-RLSTC (D) vs. RLSTCcode classical | Same T-Drive data | Classical parity validation |
+
+### Version-Specific Experiments
+
+| Experiment | Version | Variable | Measures |
+|---|---|---|---|
+| **V1** | A vs. D | State features (Q-RLSTC proxy vs. VLDB exact) | Feature design impact |
+| **V2** | B | 5 vs. 8 qubits, standard vs. multi-observable readout | Hilbert space utilisation |
+| **V3** | C | EQC vs. HEA ansatz, SAC vs. ε-greedy | Quantum-native architecture gains |
+| **V4** | C | DROP action enabled vs. disabled | Noise filtering benefit |
+| **V5** | D | SKIP action enabled vs. disabled | Efficiency of fast-forward |
+| **V6** | C | Adaptive (32→512) vs. fixed (512) shots | Shot efficiency |
+| **V7** | C | SPSA vs. m-SPSA | Momentum benefit under shot noise |
+
+### Cross-System Comparison (via `run_cross_comparison.py`)
+
+| Experiment | Classical Arm | Quantum Arm | Data | Measures |
+|---|---|---|---|---|
+| **X1** | RLSTCcode (5→64→2, SGD) | Q-RLSTC Version D (5q HEA, SPSA) | T-Drive 500 | OD parity |
+| **X2** | RLSTCcode (same) | Q-RLSTC Version A (5q HEA, SPSA) | T-Drive 500 | Feature design gap |
+| **X3** | MLP(30, SPSA) | Q-RLSTC Version A (5q, SPSA) | Synthetic | Pure approximator comparison |
 
 ### Thesis-Level (Additional)
 
 | Experiment | Variable | Measures |
 |---|---|---|
-| **E6** | Angle vs. ZZFeatureMap vs. amplitude | Best encoding for RL state |
-| **E7** | Linear vs. ring vs. full entanglement | Connectivity vs. noise |
-| **E8** | SPSA vs. parameter-shift | Gradient estimation quality |
-| **E9** | Pre-train ideal, fine-tune noisy | Noise adaptation |
+| **E8** | Angle vs. ZZFeatureMap vs. amplitude | Best encoding for RL state |
+| **E9** | Linear vs. ring vs. full entanglement | Connectivity vs. noise |
+| **E10** | SPSA vs. parameter-shift | Gradient estimation quality |
+| **E11** | Pre-train ideal, fine-tune noisy | Noise adaptation |
 
 ## Analysis Plan
 
@@ -100,6 +126,10 @@ Segment trajectories by number of true boundaries (2, 4, 8, 16) and measure OD f
 ### Cluster Assignment Stability
 
 Across 5 seeds: how consistent are cluster assignments? Higher variance in quantum → noise dominates.
+
+### Version Progression Analysis
+
+Run E6 and plot: OD vs. version (A→B→C→D). Does architectural sophistication improve results, or does simplicity win?
 
 ---
 

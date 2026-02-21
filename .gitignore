@@ -37,6 +37,15 @@ experiments/datasets/*.npz
 q_rlstc/data/GEOLIFE/
 q_rlstc/data/TDRIVE/
 q_rlstc/data/*.csv
+q_rlstc/data/Tdrive
+q_rlstc/data/Tdrive_norm_traj
+q_rlstc/data/Geolife
+q_rlstc/data/geolife_norm_traj
+q_rlstc/data/geolife_testdata
+q_rlstc/data/porto_norm_traj
+q_rlstc/data/tdrive_clustercenter
+q_rlstc/data/geolife_clustercenter
+q_rlstc/data/porto_clustercenter
 
 # Qiskit / quantum
 *.qpy
