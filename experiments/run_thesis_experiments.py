@@ -135,7 +135,7 @@ PROTOCOL = {
 @dataclass
 class ModelSpec:
     name: str
-    kind: str           # "quantum", "classical" (SPSA), or "adam" (backprop)
+    kind: str           # "quantum", "classical" (SPSA), "adam" (backprop), or "original"
     hidden_sizes: list = field(default_factory=list)
     n_layers: int = 3
     shots: int = 0      # 0 = statevector
@@ -143,6 +143,7 @@ class ModelSpec:
     n_qubits: int = 5
     run_type: str = "standard"
     data_fraction: float = 1.0
+    entanglement: str = "linear"  # 'linear', 'circular', 'full', 'none'
 
 
 def build_agent(spec: ModelSpec, seed: int):
@@ -159,6 +160,7 @@ def build_agent(spec: ModelSpec, seed: int):
             epsilon_decay=PROTOCOL["epsilon_decay"],
             shots=spec.shots,
             target_update_freq=PROTOCOL["target_update_freq"],
+            entanglement=spec.entanglement,
         )
         backend = None
         if spec.noise_model != "ideal":
@@ -485,6 +487,9 @@ def get_e1_specs():
     """E1 — Core Quantum Utility (all models, noiseless)."""
     return [
         ModelSpec("VQ-DQN (5q×3L)",     "quantum", n_layers=3),
+        # Parameter-matched baselines (34 params — same as VQ-DQN)
+        ModelSpec("MLP-34 (SPSA)",       "classical", hidden_sizes=[4]),
+        ModelSpec("MLP-34 (Adam)",        "adam", hidden_sizes=[4]),
         # SPSA-optimized controls (same optimizer as quantum)
         ModelSpec("Control A (linear)",  "classical", hidden_sizes=[]),
         ModelSpec("Control B (h=64)",    "classical", hidden_sizes=[64]),
@@ -532,6 +537,14 @@ def get_e6_specs():
     """E6 — Version Progression."""
     return [
         ModelSpec("VQ-DQN D (5q×3L)", "quantum", n_qubits=5, n_layers=3),
+    ]
+
+
+def get_ablation_entanglement_specs():
+    """Ablation: entanglement matters? (no-CNOT vs linear CNOT)."""
+    return [
+        ModelSpec("VQ-DQN (no-CNOT)", "quantum", n_layers=3, entanglement="none"),
+        ModelSpec("VQ-DQN (linear)",  "quantum", n_layers=3, entanglement="linear"),
     ]
 
 
@@ -1178,6 +1191,7 @@ EXPERIMENT_REGISTRY = {
     "E5": "Low-Data Generalization",
     "E6": "Version Progression",
     "S1": "Scalability Timing",
+    "AB1": "Entanglement Ablation (no-CNOT vs linear)",
 }
 
 
@@ -1377,13 +1391,35 @@ def main():
                 args.traj_path, args.centers_path, args.seed)
             all_results["S1"] = s1_result
 
+        # ── AB1: Entanglement Ablation ───────────────────────────────
+        if "AB1" in selected:
+            print(f"\n{'═'*70}")
+            print(f"  AB1: ENTANGLEMENT ABLATION (no-CNOT vs linear)")
+            print(f"{'═'*70}")
+            if seed_list and len(seed_list) > 1:
+                ab1_results = run_multi_seed_experiment(
+                    get_ablation_entanglement_specs, args.traj_path,
+                    args.centers_path, args.amount, args.epochs, seed_list, "AB1")
+                all_results["AB1"] = ab1_results
+                print_multi_seed_table(ab1_results, "AB1: Entanglement Ablation")
+            else:
+                ab1_results = []
+                for spec in get_ablation_entanglement_specs():
+                    agent = build_agent(spec, args.seed)
+                    r = train_and_evaluate(
+                        agent, spec, args.traj_path, args.centers_path,
+                        args.amount, args.epochs, args.seed)
+                    ab1_results.append(r)
+                all_results["AB1"] = ab1_results
+                print_summary_table(ab1_results, "AB1: Entanglement Ablation")
+
         # ── Grand summary ────────────────────────────────────────
         print(f"\n{'═'*70}")
         print(f"  GRAND SUMMARY")
         print(f"{'═'*70}\n")
 
         all_model_results = []
-        for key in ["E1", "E2", "E3", "E4", "E5", "E6"]:
+        for key in ["E1", "E2", "E3", "E4", "E5", "E6", "AB1"]:
             data = all_results.get(key)
             if isinstance(data, list):
                 all_model_results.extend(data)

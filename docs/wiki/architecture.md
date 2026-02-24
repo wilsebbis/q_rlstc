@@ -91,7 +91,7 @@ All agents share: SPSA optimizer, Double DQN, experience replay (5000), Huber lo
 
 | Component | Implementation | Rationale |
 |---|---|---|
-| Q-value estimation | **Quantum** (VQ-DQN) | Hilbert space expressivity; clean 5→2 mapping |
+| Q-value estimation | **Quantum** (VQ-DQN) | Empirically parameter-efficient; clean 5→2 mapping |
 | State encoding | **Quantum** (Angle) | Bounded features → rotation angles |
 | Distance computation | **Classical** (IED) | Incremental O(1) updates; quantum would require full re-encoding |
 | Clustering | **Classical** | Incremental center updates; no quantum centroid algorithm exists |

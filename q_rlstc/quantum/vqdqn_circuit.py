@@ -147,7 +147,9 @@ class VQDQNCircuitBuilder:
             circuit.rz(float(params[base_idx + 1]), qr[i])
         
         # Entanglement layer
-        if self.entanglement == 'linear':
+        if self.entanglement == 'none':
+            pass  # No entanglement — ablation baseline
+        elif self.entanglement == 'linear':
             # Linear chain: 0→1→2→3→4 (NO ring closure)
             for i in range(self.n_qubits - 1):
                 circuit.cx(qr[i], qr[i + 1])
@@ -393,6 +395,7 @@ def _fast_vqc_probs(
     n_qubits: int = 5,
     n_layers: int = 2,
     use_data_reuploading: bool = True,
+    entanglement: str = 'linear',
 ) -> np.ndarray:
     """Run the full VQC circuit in pure numpy, return probabilities.
     
@@ -424,9 +427,18 @@ def _fast_vqc_probs(
             psi = _apply_ry(psi, float(params[offset + q * 2]), q)
             psi = _apply_rz(psi, float(params[offset + q * 2 + 1]), q)
         
-        # Linear CNOT chain: 0→1→2→3→4
-        for q in range(n_qubits - 1):
-            psi = _apply_cnot(psi, q, q + 1)
+        # Entanglement layer
+        if entanglement == 'linear':
+            for q in range(n_qubits - 1):
+                psi = _apply_cnot(psi, q, q + 1)
+        elif entanglement == 'circular':
+            for q in range(n_qubits):
+                psi = _apply_cnot(psi, q, (q + 1) % n_qubits)
+        elif entanglement == 'full':
+            for q in range(n_qubits):
+                for q2 in range(q + 1, n_qubits):
+                    psi = _apply_cnot(psi, q, q2)
+        # 'none' → skip entanglement
         
         # Data re-uploading (not after last layer)
         if use_data_reuploading and layer < n_layers - 1:
@@ -463,6 +475,7 @@ def q_values_batch(
     use_data_reuploading: bool = True,
     output_scale: np.ndarray = None,
     output_bias: np.ndarray = None,
+    entanglement: str = 'linear',
 ) -> np.ndarray:
     """Evaluate Q-values for a BATCH of states. Returns (B, 2).
     
@@ -479,7 +492,7 @@ def q_values_batch(
     
     for b in range(B):
         probs = _fast_vqc_probs(states[b], params, n_qubits, n_layers,
-                                use_data_reuploading)
+                                use_data_reuploading, entanglement=entanglement)
         for a in range(2):
             q_out[b, a] = _z_exp(probs, a) * output_scale[a] + output_bias[a]
     
@@ -497,6 +510,7 @@ def evaluate_q_values(
     output_scale: np.ndarray = None,
     output_bias: np.ndarray = None,
     readout_mode: str = "standard",
+    entanglement: str = "linear",
 ) -> np.ndarray:
     """Evaluate Q-values by executing the VQ-DQN circuit.
     
@@ -538,7 +552,7 @@ def evaluate_q_values(
         # Direct gate application is ~100x faster than Qiskit's
         # circuit → Statevector pipeline.
         probs = _fast_vqc_probs(state, params, n_qubits, n_layers,
-                                use_data_reuploading)
+                                use_data_reuploading, entanglement=entanglement)
         
         if readout_mode == "multi_observable":
             z0 = _z_exp(probs, 0)

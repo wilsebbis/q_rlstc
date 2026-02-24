@@ -130,7 +130,7 @@ Same 5 features as Version A, plus a **shadow qubit** (qubit 0) that persists qu
 
 | Dimension | A (Classical Parity) | B (Quantum Enhanced) | C (Next-Gen Q-RNN) | D (VLDB Aligned) |
 |---|---|---|---|---|
-| **Goal** | Isolate quantum vs. classical | Leverage larger Hilbert space | Full quantum-native architecture | Strict VLDB paper reproduction |
+| **Goal** | Isolate quantum vs. classical | Explore parameter efficiency | Full quantum-native architecture | Strict VLDB paper reproduction |
 | **Qubits** | 5 | 8 | 6 | 5 |
 | **Features** | 5D (matches RLSTC) | 8D (3 quantum-native) | 5D + shadow memory | 5D (VLDB exact) |
 | **Readout** | Single-qubit Z | Multi-observable (Z + ZZ) | Softmax distribution | Multi-qubit Z |

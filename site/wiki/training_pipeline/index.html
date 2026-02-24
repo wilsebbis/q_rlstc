@@ -1892,7 +1892,7 @@
 <h1 id="training-pipeline">Training Pipeline<a class="headerlink" href="#training-pipeline" title="Permanent link">&para;</a></h1>
 <hr />
 <h2 id="training-loop">Training Loop<a class="headerlink" href="#training-loop" title="Permanent link">&para;</a></h2>
-<p>Defined in <a href="../../q_rlstc/rl/train.py"><code>train.py</code></a>:</p>
+<p>Defined in <code>train.py</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_epochs</span><span class="p">):</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">for</span> <span class="n">trajectory</span> <span class="ow">in</span> <span class="n">dataset</span><span class="o">.</span><span class="n">trajectories</span><span class="p">:</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="n">state</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">trajectory</span><span class="p">)</span>
@@ -1918,7 +1918,7 @@
 <a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>        <span class="n">log_metrics</span><span class="p">(</span><span class="n">od_score</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="spsa-optimizer">SPSA Optimizer<a class="headerlink" href="#spsa-optimizer" title="Permanent link">&para;</a></h2>
-<p>Defined in <a href="../../q_rlstc/rl/spsa.py"><code>spsa.py</code></a>. SPSA estimates gradients with only <strong>2</strong> function evaluations, regardless of parameter count.</p>
+<p>Defined in <code>spsa.py</code>. SPSA estimates gradients with only <strong>2</strong> function evaluations, regardless of parameter count.</p>
 <h3 id="algorithm">Algorithm<a class="headerlink" href="#algorithm" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>θ_{k+1} = θ_k − aₖ · ĝₖ
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
@@ -2034,7 +2034,7 @@
 </tbody>
 </table>
 <h2 id="experience-replay">Experience Replay<a class="headerlink" href="#experience-replay" title="Permanent link">&para;</a></h2>
-<p>Defined in <a href="../../q_rlstc/rl/replay_buffer.py"><code>replay_buffer.py</code></a>:</p>
+<p>Defined in <code>replay_buffer.py</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nd">@dataclass</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">Experience</span><span class="p">:</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">state</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>        <span class="c1"># 5D or 8D</span>

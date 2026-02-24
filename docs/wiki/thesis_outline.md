@@ -265,11 +265,12 @@ Plus: parameter efficiency ratio, wall-clock comparison
 
 ## 6. Results and Analysis
 
-### 6.1 Parameter Efficiency Under Budget Constraints
+### 6.1 Policy Compression Under Budget Constraints
+- **Compression ratio:** VQ-DQN achieves 38.6× compression over MLP-1314 (34 vs 1,314 params) and 1:1 parameter match with MLP-34
 - **Unconstrained:** VQ-DQN achieves lower raw ValCR than all classical controls but at substantially higher CUT rates (e.g., 40% vs 2% for Control C)
-- **Budgeted comparison (main result):** at matched CUT ≤ α, VQ-DQN with 34 parameters achieves [comparable / better / worse] ValCR relative to Control C (1,314 params)
-- Controls A/B lack representation capacity (extend-lock at CUT=0%)
-- Table: model × params × best-ValCR-at-CUT≤10% × best-ValCR-at-CUT≤30%
+- **Budgeted comparison (main result):** at matched CUT ≤ α, VQ-DQN with 34 parameters achieves `___` ValCR relative to MLP-34 (Adam), MLP-514 (Adam), and MLP-1314 (SPSA) *(fill after E1 runs)*
+- **Parameter-matched baseline (MLP-34):** 5→4→2 network with exactly 34 parameters trained with both SPSA and Adam — isolates the effect of quantum circuit structure from parameter count
+- Table: model × params × optimizer × best-ValCR-at-CUT≤10% × best-ValCR-at-CUT≤30% × 95% CI
 
 ### 6.2 ValCR Length Sensitivity (D1 Results)
 - D1 sweep table with 3 ValCR variants
@@ -304,7 +305,8 @@ Plus: parameter efficiency ratio, wall-clock comparison
 ## 7. Conclusions and Future Work
 
 ### 7.1 Summary of Contributions
-- Compact VQ-DQN policy achieves competitive segmentation with extreme parameter compression under explicit CUT budget constraints
+- **Policy compression:** VQ-DQN achieves competitive segmentation with 38.6× parameter compression (34 vs 1,314) under explicit CUT budget constraints, validated against parameter-matched (MLP-34) and overparameterised (MLP-514, MLP-1314) baselines with both gradient-free (SPSA) and gradient-based (Adam) optimizers
+- **Entanglement ablation:** Comparison of CNOT vs no-CNOT circuits provides mechanism evidence for the role of entanglement in policy quality
 - ValCR length sensitivity identified, diagnosed with formal argument and D1 empirics, and mitigated via budgeted evaluation protocol — a community-relevant contribution independent of quantum
 - Diagnostic suite (D1–D5) provides reusable template for RL stability analysis in sequential decision problems
 

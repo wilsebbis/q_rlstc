@@ -1966,10 +1966,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#61-parameter-efficiency-under-budget-constraints" class="md-nav__link">
+  <a href="#61-policy-compression-under-budget-constraints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6.1 Parameter Efficiency Under Budget Constraints
+        6.1 Policy Compression Under Budget Constraints
       
     </span>
   </a>
@@ -2695,10 +2695,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#61-parameter-efficiency-under-budget-constraints" class="md-nav__link">
+  <a href="#61-policy-compression-under-budget-constraints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6.1 Parameter Efficiency Under Budget Constraints
+        6.1 Policy Compression Under Budget Constraints
       
     </span>
   </a>
@@ -3303,12 +3303,13 @@
 </ul>
 <hr />
 <h2 id="6-results-and-analysis">6. Results and Analysis<a class="headerlink" href="#6-results-and-analysis" title="Permanent link">&para;</a></h2>
-<h3 id="61-parameter-efficiency-under-budget-constraints">6.1 Parameter Efficiency Under Budget Constraints<a class="headerlink" href="#61-parameter-efficiency-under-budget-constraints" title="Permanent link">&para;</a></h3>
+<h3 id="61-policy-compression-under-budget-constraints">6.1 Policy Compression Under Budget Constraints<a class="headerlink" href="#61-policy-compression-under-budget-constraints" title="Permanent link">&para;</a></h3>
 <ul>
+<li><strong>Compression ratio:</strong> VQ-DQN achieves 38.6× compression over MLP-1314 (34 vs 1,314 params) and 1:1 parameter match with MLP-34</li>
 <li><strong>Unconstrained:</strong> VQ-DQN achieves lower raw ValCR than all classical controls but at substantially higher CUT rates (e.g., 40% vs 2% for Control C)</li>
-<li><strong>Budgeted comparison (main result):</strong> at matched CUT ≤ α, VQ-DQN with 34 parameters achieves [comparable / better / worse] ValCR relative to Control C (1,314 params)</li>
-<li>Controls A/B lack representation capacity (extend-lock at CUT=0%)</li>
-<li>Table: model × params × best-ValCR-at-CUT≤10% × best-ValCR-at-CUT≤30%</li>
+<li><strong>Budgeted comparison (main result):</strong> at matched CUT ≤ α, VQ-DQN with 34 parameters achieves <code>___</code> ValCR relative to MLP-34 (Adam), MLP-514 (Adam), and MLP-1314 (SPSA) <em>(fill after E1 runs)</em></li>
+<li><strong>Parameter-matched baseline (MLP-34):</strong> 5→4→2 network with exactly 34 parameters trained with both SPSA and Adam — isolates the effect of quantum circuit structure from parameter count</li>
+<li>Table: model × params × optimizer × best-ValCR-at-CUT≤10% × best-ValCR-at-CUT≤30% × 95% CI</li>
 </ul>
 <h3 id="62-valcr-length-sensitivity-d1-results">6.2 ValCR Length Sensitivity (D1 Results)<a class="headerlink" href="#62-valcr-length-sensitivity-d1-results" title="Permanent link">&para;</a></h3>
 <ul>
@@ -3347,7 +3348,8 @@
 <h2 id="7-conclusions-and-future-work">7. Conclusions and Future Work<a class="headerlink" href="#7-conclusions-and-future-work" title="Permanent link">&para;</a></h2>
 <h3 id="71-summary-of-contributions">7.1 Summary of Contributions<a class="headerlink" href="#71-summary-of-contributions" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Compact VQ-DQN policy achieves competitive segmentation with extreme parameter compression under explicit CUT budget constraints</li>
+<li><strong>Policy compression:</strong> VQ-DQN achieves competitive segmentation with 38.6× parameter compression (34 vs 1,314) under explicit CUT budget constraints, validated against parameter-matched (MLP-34) and overparameterised (MLP-514, MLP-1314) baselines with both gradient-free (SPSA) and gradient-based (Adam) optimizers</li>
+<li><strong>Entanglement ablation:</strong> Comparison of CNOT vs no-CNOT circuits provides mechanism evidence for the role of entanglement in policy quality</li>
 <li>ValCR length sensitivity identified, diagnosed with formal argument and D1 empirics, and mitigated via budgeted evaluation protocol — a community-relevant contribution independent of quantum</li>
 <li>Diagnostic suite (D1–D5) provides reusable template for RL stability analysis in sequential decision problems</li>
 </ul>

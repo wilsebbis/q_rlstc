@@ -1622,7 +1622,11 @@
 <p><strong>Quantum-Enhanced Reinforcement Learning for Sub-Trajectory Clustering</strong></p>
 <hr />
 <h2 id="what-is-q-rlstc">What is Q-RLSTC?<a class="headerlink" href="#what-is-q-rlstc" title="Permanent link">&para;</a></h2>
-<p>Q-RLSTC uses a <strong>Variational Quantum Deep Q-Network (VQ-DQN)</strong> to learn optimal trajectory segmentation policies. A 5-qubit quantum circuit serves as the policy network, deciding where to cut GPS trajectories into meaningful sub-trajectories that cluster well together.</p>
+<p>Q-RLSTC uses a <strong>Variational Quantum Deep Q-Network (VQ-DQN)</strong> to learn optimal trajectory segmentation policies. A 5-qubit quantum circuit serves as a parameter-efficient policy network (34 trainable parameters), deciding where to cut GPS trajectories into meaningful sub-trajectories that cluster well together.</p>
+<blockquote>
+<p>[!NOTE]
+<strong>Scope:</strong> All quantum experiments use Qiskit Aer simulation (statevector + noise models). The value proposition is parameter efficiency (34 vs 514–1,314 classical parameters), not training speedup. Results are reported under budget-constrained evaluation to account for ValCR metric degeneracy.</p>
+</blockquote>
 <h2 id="quick-links">Quick Links<a class="headerlink" href="#quick-links" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

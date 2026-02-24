@@ -9,7 +9,7 @@ Trajectory clustering requires comparing trajectories to cluster centroids repea
 
 ## Integrated Euclidean Distance (IED)
 
-IED is the primary metric, inherited from classical RLSTC and now fully ported to Q-RLSTC in [`trajdistance.py`](../../q_rlstc/clustering/trajdistance.py).
+IED is the primary metric, inherited from classical RLSTC and now fully ported to Q-RLSTC in `trajdistance.py`.
 
 ### Geometric Interpretation
 
@@ -70,7 +70,7 @@ This is _intentionally_ less precise than full IED — the reward only needs a d
 
 **When used:** Episode-end evaluation only — _not_ per-step.
 
-Defined in [`classical_kmeans.py`](../../q_rlstc/clustering/classical_kmeans.py). Standard Lloyd's algorithm with k-means++ initialisation:
+Defined in `classical_kmeans.py`. Standard Lloyd's algorithm with k-means++ initialisation:
 
 ```python
 class ClassicalKMeans:
@@ -87,7 +87,7 @@ class ClassicalKMeans:
 
 ### Evaluation Metrics
 
-Defined in [`metrics.py`](../../q_rlstc/clustering/metrics.py):
+Defined in `metrics.py`:
 
 | Metric | Measures | Usage |
 |---|---|---|
@@ -97,7 +97,7 @@ Defined in [`metrics.py`](../../q_rlstc/clustering/metrics.py):
 
 ## Incremental Cluster Management
 
-Ported from RLSTCcode's `cluster.py` to provide online cluster updates during RL training. Defined in the lower half of [`classical_kmeans.py`](../../q_rlstc/clustering/classical_kmeans.py):
+Ported from RLSTCcode's `cluster.py` to provide online cluster updates during RL training. Defined in the lower half of `classical_kmeans.py`:
 
 | Function | Purpose |
 |---|---|
@@ -120,7 +120,7 @@ cluster_dict[k] = [
 
 ## Data Loading — `pickle_loader.py`
 
-Loads RLSTCcode-format pickle files directly. Defined in [`pickle_loader.py`](../../q_rlstc/clustering/pickle_loader.py):
+Loads RLSTCcode-format pickle files directly. Defined in `pickle_loader.py`:
 
 | Function | Purpose |
 |---|---|
@@ -133,7 +133,7 @@ Loads RLSTCcode-format pickle files directly. Defined in [`pickle_loader.py`](..
 
 ## MDL Preprocessing — `preprocessing.py`
 
-The TRACLUS-style MDL simplification pipeline, ported from RLSTCcode. Defined in [`preprocessing.py`](../../q_rlstc/data/preprocessing.py):
+The TRACLUS-style MDL simplification pipeline, ported from RLSTCcode. Defined in `preprocessing.py`:
 
 | Function | Purpose |
 |---|---|

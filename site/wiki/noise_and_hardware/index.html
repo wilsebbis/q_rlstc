@@ -1715,9 +1715,9 @@
 
 <h1 id="noise-hardware-simulation">Noise &amp; Hardware Simulation<a class="headerlink" href="#noise-hardware-simulation" title="Permanent link">&para;</a></h1>
 <hr />
-<p>Q-RLSTC includes a full noise simulation stack with no classical RLSTC equivalent. All components are in the <a href="../../q_rlstc/quantum/"><code>quantum/</code></a> package.</p>
+<p>Q-RLSTC includes a full noise simulation stack with no classical RLSTC equivalent. All components are in the <code>quantum/</code> package.</p>
 <h2 id="backend-factory">Backend Factory<a class="headerlink" href="#backend-factory" title="Permanent link">&para;</a></h2>
-<p>Defined in <a href="../../q_rlstc/quantum/backends.py"><code>backends.py</code></a>:</p>
+<p>Defined in <code>backends.py</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_backend</span><span class="p">(</span><span class="n">mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">noise_model_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;ideal&quot;</span><span class="p">:</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="k">return</span> <span class="n">AerSimulator</span><span class="p">()</span>
@@ -1806,7 +1806,7 @@
 </tbody>
 </table>
 <h2 id="readout-error-mitigation">Readout Error Mitigation<a class="headerlink" href="#readout-error-mitigation" title="Permanent link">&para;</a></h2>
-<p>Defined in <a href="../../q_rlstc/quantum/mitigation.py"><code>mitigation.py</code></a>:</p>
+<p>Defined in <code>mitigation.py</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ReadoutMitigator</span><span class="p">:</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">calibrate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">shots</span><span class="o">=</span><span class="mi">8192</span><span class="p">):</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Build calibration matrix by measuring all basis states.&quot;&quot;&quot;</span>

@@ -1952,7 +1952,7 @@
 <h2 id="the-distance-problem">The Distance Problem<a class="headerlink" href="#the-distance-problem" title="Permanent link">&para;</a></h2>
 <p>Trajectory clustering requires comparing trajectories to cluster centroids repeatedly. Each training episode performs hundreds of distance computations. Q-RLSTC addresses this via incremental classical distance with an optional quantum swap test for research validation.</p>
 <h2 id="integrated-euclidean-distance-ied">Integrated Euclidean Distance (IED)<a class="headerlink" href="#integrated-euclidean-distance-ied" title="Permanent link">&para;</a></h2>
-<p>IED is the primary metric, inherited from classical RLSTC and now fully ported to Q-RLSTC in <a href="../../q_rlstc/clustering/trajdistance.py"><code>trajdistance.py</code></a>.</p>
+<p>IED is the primary metric, inherited from classical RLSTC and now fully ported to Q-RLSTC in <code>trajdistance.py</code>.</p>
 <h3 id="geometric-interpretation">Geometric Interpretation<a class="headerlink" href="#geometric-interpretation" title="Permanent link">&para;</a></h3>
 <p>IED computes the <em>area</em> between two trajectories over their temporal overlap — the integral of spatial distance across a common time interval.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>For aligned segments with time interval [tₛ, tₑ]:
@@ -2057,7 +2057,7 @@
 <p>This is <em>intentionally</em> less precise than full IED — the reward only needs a directional signal (is clustering improving?), not exact distance values.</p>
 <h2 id="k-means-clustering">K-Means Clustering<a class="headerlink" href="#k-means-clustering" title="Permanent link">&para;</a></h2>
 <p><strong>When used:</strong> Episode-end evaluation only — <em>not</em> per-step.</p>
-<p>Defined in <a href="../../q_rlstc/clustering/classical_kmeans.py"><code>classical_kmeans.py</code></a>. Standard Lloyd's algorithm with k-means++ initialisation:</p>
+<p>Defined in <code>classical_kmeans.py</code>. Standard Lloyd's algorithm with k-means++ initialisation:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ClassicalKMeans</span><span class="p">:</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="n">centroids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_initialize_centroids</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>     <span class="c1"># k-means++</span>
@@ -2070,7 +2070,7 @@
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="k">return</span> <span class="n">KMeansResult</span><span class="p">(</span><span class="n">centroids</span><span class="p">,</span> <span class="n">labels</span><span class="p">,</span> <span class="n">objective</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="evaluation-metrics">Evaluation Metrics<a class="headerlink" href="#evaluation-metrics" title="Permanent link">&para;</a></h3>
-<p>Defined in <a href="../../q_rlstc/clustering/metrics.py"><code>metrics.py</code></a>:</p>
+<p>Defined in <code>metrics.py</code>:</p>
 <table>
 <thead>
 <tr>
@@ -2098,7 +2098,7 @@
 </tbody>
 </table>
 <h2 id="incremental-cluster-management">Incremental Cluster Management<a class="headerlink" href="#incremental-cluster-management" title="Permanent link">&para;</a></h2>
-<p>Ported from RLSTCcode's <code>cluster.py</code> to provide online cluster updates during RL training. Defined in the lower half of <a href="../../q_rlstc/clustering/classical_kmeans.py"><code>classical_kmeans.py</code></a>:</p>
+<p>Ported from RLSTCcode's <code>cluster.py</code> to provide online cluster updates during RL training. Defined in the lower half of <code>classical_kmeans.py</code>:</p>
 <table>
 <thead>
 <tr>
@@ -2138,7 +2138,7 @@
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">]</span>
 </code></pre></div>
 <h2 id="data-loading-pickle_loaderpy">Data Loading — <code>pickle_loader.py</code><a class="headerlink" href="#data-loading-pickle_loaderpy" title="Permanent link">&para;</a></h2>
-<p>Loads RLSTCcode-format pickle files directly. Defined in <a href="../../q_rlstc/clustering/pickle_loader.py"><code>pickle_loader.py</code></a>:</p>
+<p>Loads RLSTCcode-format pickle files directly. Defined in <code>pickle_loader.py</code>:</p>
 <table>
 <thead>
 <tr>
@@ -2174,7 +2174,7 @@
 </tbody>
 </table>
 <h2 id="mdl-preprocessing-preprocessingpy">MDL Preprocessing — <code>preprocessing.py</code><a class="headerlink" href="#mdl-preprocessing-preprocessingpy" title="Permanent link">&para;</a></h2>
-<p>The TRACLUS-style MDL simplification pipeline, ported from RLSTCcode. Defined in <a href="../../q_rlstc/data/preprocessing.py"><code>preprocessing.py</code></a>:</p>
+<p>The TRACLUS-style MDL simplification pipeline, ported from RLSTCcode. Defined in <code>preprocessing.py</code>:</p>
 <table>
 <thead>
 <tr>

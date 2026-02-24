@@ -7,7 +7,7 @@
 
 The segmentation problem is modelled as a Markov Decision Process. At each point along a trajectory, the agent observes a state and decides to **extend** the current segment or **cut** to start a new one.
 
-**Implementation:** [`rlstc_mdp.py → TrajRLclus`](../../q_rlstc/data/rlstc_mdp.py)
+**Implementation:** `rlstc_mdp.py → TrajRLclus`
 
 ## State Space (5D)
 

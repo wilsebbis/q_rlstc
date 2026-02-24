@@ -3,7 +3,7 @@
 
 ---
 
-All quantum components are defined in [`vqdqn_circuit.py`](../../q_rlstc/quantum/vqdqn_circuit.py).
+All quantum components are defined in `vqdqn_circuit.py`.
 
 ## Circuit Architecture
 

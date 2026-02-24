@@ -42,10 +42,10 @@ Components that fail _any_ criterion default to classical. The quantum budget is
 **What:** Maps 5D state → 2 Q-values.
 
 **Why quantum is the research choice:**
-1. **Parameter efficiency** — 20 params vs. ~450 classical (22.5× reduction). A 5-qubit circuit accesses a 2⁵ = 32-dimensional Hilbert space.
+1. **Parameter efficiency** — 20 params vs. ~450 classical (22.5× reduction). A 5-qubit circuit operates in a 2⁵ = 32-dimensional Hilbert space, providing empirically observed parameter efficiency.
 2. **Natural input mapping** — 5 features → 5 qubits, one-to-one via angle encoding. No padding, no truncation.
 3. **NISQ-feasible** — 5 qubits, depth ~11, 8 CNOTs total. Fits within Eagle (~100μs T₂) and Heron (~200μs T₂).
-4. **Expressivity** — Low-dimensional continuous function approximation is the regime where VQCs have theoretical advantages (Schuld et al., 2021).
+4. **Empirical support for low-dimensional approximation** — Low-dimensional continuous function approximation is the regime where VQCs have shown empirical advantages (Schuld et al., 2021).
 
 **Classical control experiments:**
 - Control A: 5→4→2 MLP (30 params — parameter-matched)
@@ -105,7 +105,7 @@ Quantum version (swap test): ~100 circuit evaluations for less accuracy. 10,000�
 | Component | Assignment | One-Line Justification |
 |---|---|---|
 | Feature extraction | Classical | Sequential geometry on ordered trajectory; no quantum speedup exists |
-| **Policy network** | **Quantum** | 22× parameter reduction via Hilbert space; clean 5→5 qubit mapping; NISQ-feasible |
+| **Policy network** | **Quantum** | 22× parameter reduction with empirically competitive performance; clean 5→5 qubit mapping; NISQ-feasible |
 | Distance (IED) | Classical | Incremental O(1) impossible in quantum; re-encoding costs 100,000× |
 | K-means clustering | Classical | No quantum centroid update; runs once per epoch |
 | Reward computation | Classical | Single FP subtraction; quantum 10⁶× slower |
@@ -116,7 +116,7 @@ Quantum version (swap test): ~100 circuit evaluations for less accuracy. 10,000�
 
 ## The Argument in One Paragraph
 
-Q-RLSTC uses quantum computation for exactly one component: the policy function approximator. This is the only component where quantum structure provides a demonstrable advantage (parameter efficiency via Hilbert space expressivity), where input dimensions naturally map to qubits (5 features → 5 qubits), and where NISQ constraints are satisfied (depth 11, 8 CNOTs). Every other component is either inherently sequential (trajectories), requires incremental updates (IED), or is trivially cheap (reward subtraction). Making these quantum would introduce orders-of-magnitude overhead for zero algorithmic improvement.
+Q-RLSTC uses quantum computation for exactly one component: the policy function approximator. This is the only component where quantum structure provides an empirically observed benefit (parameter efficiency), where input dimensions naturally map to qubits (5 features → 5 qubits), and where NISQ constraints are satisfied (depth 11, 8 CNOTs). Every other component is either inherently sequential (trajectories), requires incremental updates (IED), or is trivially cheap (reward subtraction). Making these quantum would introduce orders-of-magnitude overhead for zero algorithmic improvement.
 
 ---
 

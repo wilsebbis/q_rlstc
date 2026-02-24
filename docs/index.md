@@ -6,7 +6,10 @@
 
 ## What is Q-RLSTC?
 
-Q-RLSTC uses a **Variational Quantum Deep Q-Network (VQ-DQN)** to learn optimal trajectory segmentation policies. A 5-qubit quantum circuit serves as the policy network, deciding where to cut GPS trajectories into meaningful sub-trajectories that cluster well together.
+Q-RLSTC uses a **Variational Quantum Deep Q-Network (VQ-DQN)** to learn optimal trajectory segmentation policies. A 5-qubit quantum circuit serves as a parameter-efficient policy network (34 trainable parameters), deciding where to cut GPS trajectories into meaningful sub-trajectories that cluster well together.
+
+> [!NOTE]
+> **Scope:** All quantum experiments use Qiskit Aer simulation (statevector + noise models). The value proposition is parameter efficiency (34 vs 514–1,314 classical parameters), not training speedup. Results are reported under budget-constrained evaluation to account for ValCR metric degeneracy.
 
 ## Quick Links
 

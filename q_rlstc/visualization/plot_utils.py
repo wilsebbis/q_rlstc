@@ -792,6 +792,64 @@ def plot_shot_sensitivity(
     plt.close(fig)
 
 
+def plot_sample_efficiency(
+    curves: Dict[str, Dict[str, Any]],
+    out_path: Union[str, Path] = "sample_efficiency.png",
+    title: str = "Sample Efficiency: ValCR vs Training Episodes",
+    smooth_window: int = 5,
+):
+    """Plot learning curves comparing models' sample efficiency.
+
+    This is Figure 2 in the NeurIPS workshop paper.
+
+    Args:
+        curves: {model_name: {"epochs": [1,2,...], "mean": [...], "ci_low": [...], "ci_high": [...]}}
+            If ci_low/ci_high missing, only mean is plotted (no shading).
+        out_path: Output file path.
+        title: Plot title.
+        smooth_window: Moving average window.
+    """
+    _require_mpl()
+    import matplotlib.pyplot as plt
+    _apply_style()
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    model_colors = [
+        "#e6194B",  # red
+        "#3cb44b",  # green
+        "#4363d8",  # blue
+        "#f58231",  # orange
+        "#911eb4",  # purple
+        "#42d4f4",  # cyan
+        "#f032e6",  # magenta
+        "#aaaaaa",  # grey
+    ]
+
+    for idx, (name, data) in enumerate(curves.items()):
+        color = model_colors[idx % len(model_colors)]
+        epochs = data["epochs"]
+        mean = _smooth(data["mean"], smooth_window) if smooth_window > 1 else data["mean"]
+
+        ax.plot(epochs[:len(mean)], mean, label=name, color=color, linewidth=2)
+
+        if "ci_low" in data and "ci_high" in data:
+            ci_low = _smooth(data["ci_low"], smooth_window) if smooth_window > 1 else data["ci_low"]
+            ci_high = _smooth(data["ci_high"], smooth_window) if smooth_window > 1 else data["ci_high"]
+            ax.fill_between(
+                epochs[:len(ci_low)], ci_low, ci_high,
+                alpha=0.15, color=color,
+            )
+
+    ax.set_xlabel("Training Episodes")
+    ax.set_ylabel("ValCR (lower = better)")
+    ax.set_title(title)
+    ax.legend(loc="upper right")
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def plot_q_value_evolution(
     q_values_per_epoch: List[Tuple[float, float]],
     out_path: Union[str, Path] = "q_value_evolution.png",

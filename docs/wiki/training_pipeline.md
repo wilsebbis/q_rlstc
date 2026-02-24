@@ -5,7 +5,7 @@
 
 ## Training Loop
 
-Defined in [`train.py`](../../q_rlstc/rl/train.py):
+Defined in `train.py`:
 
 ```python
 for epoch in range(n_epochs):
@@ -35,7 +35,7 @@ for epoch in range(n_epochs):
 
 ## SPSA Optimizer
 
-Defined in [`spsa.py`](../../q_rlstc/rl/spsa.py). SPSA estimates gradients with only **2** function evaluations, regardless of parameter count.
+Defined in `spsa.py`. SPSA estimates gradients with only **2** function evaluations, regardless of parameter count.
 
 ### Algorithm
 
@@ -127,7 +127,7 @@ def compute_target(reward, next_state, done):
 
 ## Experience Replay
 
-Defined in [`replay_buffer.py`](../../q_rlstc/rl/replay_buffer.py):
+Defined in `replay_buffer.py`:
 
 ```python
 @dataclass

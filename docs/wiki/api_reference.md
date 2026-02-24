@@ -3,7 +3,7 @@
 
 ---
 
-## Configuration — [`config.py`](../../q_rlstc/config.py)
+## Configuration — `config.py`
 
 ### `VQDQNConfig`
 
@@ -71,7 +71,7 @@ class QRLSTCConfig:
 
 ---
 
-## Quantum Circuit — [`quantum/vqdqn_circuit.py`](../../q_rlstc/quantum/vqdqn_circuit.py)
+## Quantum Circuit — `quantum/vqdqn_circuit.py`
 
 ### `VQDQNCircuitBuilder`
 
@@ -84,7 +84,7 @@ class QRLSTCConfig:
 
 ---
 
-## Agent — [`rl/vqdqn_agent.py`](../../q_rlstc/rl/vqdqn_agent.py)
+## Agent — `rl/vqdqn_agent.py`
 
 ### `VQDQNAgent`
 
@@ -99,7 +99,7 @@ class QRLSTCConfig:
 
 ---
 
-## Training — [`rl/train.py`](../../q_rlstc/rl/train.py)
+## Training — `rl/train.py`
 
 ### `MDPEnvironment`
 
@@ -119,7 +119,7 @@ Top-level training function. Returns `TrainingResult` with history, final metric
 
 ---
 
-## SPSA Optimizer — [`rl/spsa.py`](../../q_rlstc/rl/spsa.py)
+## SPSA Optimizer — `rl/spsa.py`
 
 ### `SPSAOptimizer`
 
@@ -132,7 +132,7 @@ Top-level training function. Returns `TrainingResult` with history, final metric
 
 ---
 
-## Replay Buffer — [`rl/replay_buffer.py`](../../q_rlstc/rl/replay_buffer.py)
+## Replay Buffer — `rl/replay_buffer.py`
 
 ### `Experience`
 
@@ -157,7 +157,7 @@ class Experience:
 
 ---
 
-## Features — [`data/features.py`](../../q_rlstc/data/features.py)
+## Features — `data/features.py`
 
 ### `StateFeatureExtractor` (Version A)
 
@@ -179,7 +179,7 @@ class Experience:
 
 ---
 
-## Trajectory Distance — [`clustering/trajdistance.py`](../../q_rlstc/clustering/trajdistance.py)
+## Trajectory Distance — `clustering/trajdistance.py`
 
 ### Core IED Functions
 
@@ -207,7 +207,7 @@ class Experience:
 
 ---
 
-## Pickle Data Loader — [`clustering/pickle_loader.py`](../../q_rlstc/clustering/pickle_loader.py)
+## Pickle Data Loader — `clustering/pickle_loader.py`
 
 | Function | Signature | Description |
 |---|---|---|
@@ -221,7 +221,7 @@ class Experience:
 
 ---
 
-## MDL Preprocessing — [`data/preprocessing.py`](../../q_rlstc/data/preprocessing.py)
+## MDL Preprocessing — `data/preprocessing.py`
 
 | Function | Signature | Description |
 |---|---|---|
@@ -235,16 +235,16 @@ class Experience:
 
 ---
 
-## Clustering — [`clustering/`](../../q_rlstc/clustering/)
+## Clustering — `clustering/`
 
-### `ClassicalKMeans` — [`classical_kmeans.py`](../../q_rlstc/clustering/classical_kmeans.py)
+### `ClassicalKMeans` — `classical_kmeans.py`
 
 | Method | Signature | Description |
 |---|---|---|
 | `fit` | `(data: ndarray) → KMeansResult` | Run k-means++ |
 | `predict` | `(data: ndarray) → ndarray` | Assign clusters |
 
-### Incremental Cluster Management — [`classical_kmeans.py`](../../q_rlstc/clustering/classical_kmeans.py)
+### Incremental Cluster Management — `classical_kmeans.py`
 
 | Function | Signature | Description |
 |---|---|---|
@@ -254,7 +254,7 @@ class Experience:
 | `compute_overdist` | `(cluster_dict) → float` | Compute overall distance |
 | `initialize_cluster_dict` | `(n_clusters, centers) → Dict` | Create empty cluster dict |
 
-### Metrics — [`metrics.py`](../../q_rlstc/clustering/metrics.py)
+### Metrics — `metrics.py`
 
 | Function | Signature | Description |
 |---|---|---|
@@ -264,14 +264,14 @@ class Experience:
 
 ---
 
-## Backends — [`quantum/backends.py`](../../q_rlstc/quantum/backends.py)
+## Backends — `quantum/backends.py`
 
 | Function | Signature | Description |
 |---|---|---|
 | `get_backend` | `(mode, noise_model_name) → AerSimulator` | Backend factory |
 | `get_noise_model` | `(name: str) → NoiseModel` | Named noise profile |
 
-## Mitigation — [`quantum/mitigation.py`](../../q_rlstc/quantum/mitigation.py)
+## Mitigation — `quantum/mitigation.py`
 
 | Method | Signature | Description |
 |---|---|---|
@@ -280,7 +280,7 @@ class Experience:
 
 ---
 
-## Data — [`data/synthetic.py`](../../q_rlstc/data/synthetic.py)
+## Data — `data/synthetic.py`
 
 ### `SyntheticDataset`
 

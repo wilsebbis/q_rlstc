@@ -15,7 +15,7 @@
 | **Optimizer** | Backpropagation + Adam | **SPSA** (gradient-free, 2 function evals) |
 | **Exploration** | ε-greedy | ε-greedy (A/B) or **entropy-regularised SAC** (C) |
 | **State Encoding** | Raw feature vector | **Angle encoding**: RY(2·arctan(x_i)) |
-| **Hypothesis Space** | Unconstrained function class | Constrained by Hilbert space geometry |
+| **Hypothesis Space** | Unconstrained function class | Constrained by circuit structure and encoding |
 | **Hardware Target** | GPU/CPU | **NISQ quantum processors** (5–8 qubits) |
 
 ### Why Quantum?
@@ -23,7 +23,7 @@
 The key insight is **not** that quantum is faster — it isn't for this problem size. The advantages are:
 
 1. **Extreme parameter efficiency**: 20 parameters vs thousands means the model can be serialised in 80 bytes, enabling federated learning on mobile devices
-2. **Implicit regularisation**: The bounded Hilbert space and trigonometric activation functions (from angle encoding) naturally prevent overfitting
+2. **Possible implicit regularisation**: The bounded output range and trigonometric activation functions (from angle encoding) may provide implicit regularization
 3. **Entanglement as feature interaction**: CNOT gates create correlations between features that would require many classical layers to represent
 4. **NISQ hardware compatibility**: The shallow circuits (depth 2–4) run within coherence times of current IBM/IonQ hardware
 
@@ -132,7 +132,7 @@ Adds 3 additional state features that leverage the quantum circuit's structure:
   - `curvature_gradient`: Rate of change of trajectory curvature — second-order geometric signal
   - `segment_density`: Local density of already-placed boundaries
 - **8 qubits** for 8 features, with multi-observable readout
-- **Purpose**: Demonstrate quantum advantage through parity-based readout that captures entanglement correlations classical networks cannot efficiently access
+- **Purpose**: Investigate quantum utility for compact readout that captures entanglement correlations
 
 ### Version C: Next-Gen Q-RNN (6q)
 

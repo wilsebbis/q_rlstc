@@ -3,11 +3,11 @@
 
 ---
 
-Q-RLSTC includes a full noise simulation stack with no classical RLSTC equivalent. All components are in the [`quantum/`](../../q_rlstc/quantum/) package.
+Q-RLSTC includes a full noise simulation stack with no classical RLSTC equivalent. All components are in the `quantum/` package.
 
 ## Backend Factory
 
-Defined in [`backends.py`](../../q_rlstc/quantum/backends.py):
+Defined in `backends.py`:
 
 ```python
 def get_backend(mode: str, noise_model_name: str = None):
@@ -40,7 +40,7 @@ For the 5-qubit VQ-DQN (depth ~11, 8 CNOTs):
 
 ## Readout Error Mitigation
 
-Defined in [`mitigation.py`](../../q_rlstc/quantum/mitigation.py):
+Defined in `mitigation.py`:
 
 ```python
 class ReadoutMitigator:

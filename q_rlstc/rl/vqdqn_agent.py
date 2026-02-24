@@ -50,6 +50,7 @@ class AgentConfig:
     shots: int = 512
     use_double_dqn: bool = True
     target_update_freq: int = 10
+    entanglement: str = "linear"  # 'linear', 'circular', 'full', 'none'
     
     def __post_init__(self):
         """Auto-set n_qubits from version if still at default."""
@@ -90,6 +91,7 @@ class VQDQNAgent:
             n_qubits=self.config.n_qubits,
             n_layers=self.config.n_layers,
             use_data_reuploading=True,
+            entanglement=self.config.entanglement,
         )
         
         # Initialize parameters
@@ -167,6 +169,7 @@ class VQDQNAgent:
             output_scale=scale,
             output_bias=bias,
             readout_mode=self.readout_mode,
+            entanglement=self.config.entanglement,
         )
         return np.clip(q, -10.0, 10.0)
     
@@ -221,11 +224,13 @@ class VQDQNAgent:
             q_online = q_values_batch(
                 alive_next, online_circ,
                 self.config.n_qubits, self.config.n_layers,
-                output_scale=online_scale, output_bias=online_bias)
+                output_scale=online_scale, output_bias=online_bias,
+                entanglement=self.config.entanglement)
             q_target = q_values_batch(
                 alive_next, target_circ,
                 self.config.n_qubits, self.config.n_layers,
-                output_scale=target_scale, output_bias=target_bias)
+                output_scale=target_scale, output_bias=target_bias,
+                entanglement=self.config.entanglement)
             best_actions = np.argmax(q_online, axis=1)
             next_values = q_target[np.arange(len(alive_next)), best_actions]
         else:
@@ -233,7 +238,8 @@ class VQDQNAgent:
             q_target = q_values_batch(
                 alive_next, target_circ,
                 self.config.n_qubits, self.config.n_layers,
-                output_scale=target_scale, output_bias=target_bias)
+                output_scale=target_scale, output_bias=target_bias,
+                entanglement=self.config.entanglement)
             next_values = np.max(q_target, axis=1)
         
         targets[alive] += self.config.gamma * next_values
@@ -255,7 +261,8 @@ class VQDQNAgent:
         q_all = q_values_batch(
             states, circuit_p,
             self.config.n_qubits, self.config.n_layers,
-            output_scale=scale, output_bias=bias)
+            output_scale=scale, output_bias=bias,
+            entanglement=self.config.entanglement)
         
         B = len(states)
         preds = q_all[np.arange(B), actions.astype(int)]

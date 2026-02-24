@@ -2140,7 +2140,7 @@ and how the VQ-DQN design compares to dina-quantum's approach.</p>
 <tr>
 <td><strong>Hypothesis Space</strong></td>
 <td>Unconstrained function class</td>
-<td>Constrained by Hilbert space geometry</td>
+<td>Constrained by circuit structure and encoding</td>
 </tr>
 <tr>
 <td><strong>Hardware Target</strong></td>
@@ -2153,7 +2153,7 @@ and how the VQ-DQN design compares to dina-quantum's approach.</p>
 <p>The key insight is <strong>not</strong> that quantum is faster — it isn't for this problem size. The advantages are:</p>
 <ol>
 <li><strong>Extreme parameter efficiency</strong>: 20 parameters vs thousands means the model can be serialised in 80 bytes, enabling federated learning on mobile devices</li>
-<li><strong>Implicit regularisation</strong>: The bounded Hilbert space and trigonometric activation functions (from angle encoding) naturally prevent overfitting</li>
+<li><strong>Possible implicit regularisation</strong>: The bounded output range and trigonometric activation functions (from angle encoding) may provide implicit regularization</li>
 <li><strong>Entanglement as feature interaction</strong>: CNOT gates create correlations between features that would require many classical layers to represent</li>
 <li><strong>NISQ hardware compatibility</strong>: The shallow circuits (depth 2–4) run within coherence times of current IBM/IonQ hardware</li>
 </ol>
@@ -2346,7 +2346,7 @@ where <code>count_0</code> = number of times qubit i measured |0⟩, <code>count
 <li><code>curvature_gradient</code>: Rate of change of trajectory curvature — second-order geometric signal</li>
 <li><code>segment_density</code>: Local density of already-placed boundaries</li>
 <li><strong>8 qubits</strong> for 8 features, with multi-observable readout</li>
-<li><strong>Purpose</strong>: Demonstrate quantum advantage through parity-based readout that captures entanglement correlations classical networks cannot efficiently access</li>
+<li><strong>Purpose</strong>: Investigate quantum utility for compact readout that captures entanglement correlations</li>
 </ul>
 <h3 id="version-c-next-gen-q-rnn-6q">Version C: Next-Gen Q-RNN (6q)<a class="headerlink" href="#version-c-next-gen-q-rnn-6q" title="Permanent link">&para;</a></h3>
 <p>The Q-RLSTC 2.0 flagship. Bundles all advanced features:</p>
