@@ -1,288 +1,627 @@
+"""Incremental IED clustering and cluster-center maintenance.
+
+This module implements the core clustering logic for the RLSTCcode MDP
+environment.  As the RL agent scans through a trajectory and decides
+where to cut, these functions incrementally update the distance from
+the growing sub-trajectory to each cluster center, assign segments to
+the nearest cluster, and recompute cluster centers.
+
+**Key concepts:**
+
+- **incremental IED:** Instead of recomputing the full ``traj2trajIED``
+  from scratch each time the agent extends a sub-trajectory by one
+  point, the ``incremental_sp`` / ``incremental_nsp`` functions update
+  a cached partial-distance dictionary (``k_dict``).
+
+- **cluster_dict structure:** A dictionary keyed by cluster ID, where
+  each value is a list:
+  ``[distances, sub_trajectories, center_points, time_point_dict, segment_lengths]``
+
+See Also:
+    :mod:`data.rlstc_trajdistance` — distance functions used here.
+    :class:`data.rlstc_mdp.TrajRLclus` — MDP that calls these functions.
+"""
+
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
+
 from .rlstc_point import Point
 from .rlstc_segment import Segment
 from .rlstc_traj import Traj
-from .rlstc_trajdistance import traj2trajIED, getstaticIED, makemid, line2lineIDE
+from .rlstc_trajdistance import (
+    getstaticIED,
+    line2lineIDE,
+    makemid,
+    traj2trajIED,
+)
 
-def incremental_sp(traj1,traj2, k_dict, k):
-    t1s, t1e, t2s, t2e = traj1[0].t, traj1[-1].t, traj2[0].t, traj2[-1].t
-    if t1s >= t2e or t1e <= t2s:
-        k_dict[k]['mid_dist'] = 1e10
-        k_dict[k]['real_dist'] = 1e10
-        k_dict[k]['lastp'] = traj2[0]
-        k_dict[k]['j'] = 0
-        return k_dict
-    e_i = len(traj2) - 1
-    if t1e >= t2e:
-        d = traj2trajIED(traj1, traj2)
-        k_dict[k]['mid_dist'] = d
-        k_dict[k]['real_dist'] = d
-        k_dict[k]['lastp'] = Point(traj2[-1].x, traj2[-1].y, t1e)
-        k_dict[k]['j'] = len(traj2) - 1
-        return k_dict
-    else:
-        while traj2[e_i].t > t1e:
-            e_i -= 1
-        if traj2[e_i].t == t1e:
-            lastp = traj2[e_i]
-            front_traj2 = traj2[:e_i + 1]
-            mid_dist = traj2trajIED(traj1, front_traj2)
-            back_traj2 = traj2[e_i:]
-            back_dist = getstaticIED(back_traj2, traj1[-1].x,traj1[-1].y, t1e, t2e)
-            k_dict[k]['mid_dist'] = mid_dist
-            k_dict[k]['real_dist'] = mid_dist + back_dist
-            k_dict[k]['lastp'] = lastp
-            k_dict[k]['j'] = e_i
-        if traj2[e_i].t < t1e:
-            front_traj2 = traj2[:e_i + 1]
-            x = makemid(traj2[e_i].x, traj2[e_i].t, traj2[e_i + 1].x, traj2[e_i + 1].t, t1e)
-            y = makemid(traj2[e_i].y, traj2[e_i].t, traj2[e_i + 1].y, traj2[e_i + 1].t, t1e)
-            lastp = Point(x, y, t1e)
-            front_traj2.append(lastp)
-            back_traj2 = traj2[e_i + 1:]
-            back_traj2.insert(0, lastp)
-            mid_dist = traj2trajIED(traj1, front_traj2)
-            back_dist = getstaticIED(back_traj2, traj1[-1].x, traj1[-1].y, t1e, t2e)
-            k_dict[k]['mid_dist'] = mid_dist
-            k_dict[k]['real_dist'] = mid_dist + back_dist
-            k_dict[k]['lastp'] = lastp
-            k_dict[k]['j'] = e_i
-        return k_dict
-    
-def incremental_nsp(traj1, traj2, k_dict, k, i):
-    t1s, t1e, t2s, t2e = traj1[0].t, traj1[-1].t, traj2[0].t, traj2[-1].t
-    if t1s >= t2e or t1e <= t2s:
-        k_dict[k]['mid_dist'] = 1e10
-        k_dict[k]['real_dist'] = 1e10
-        k_dict[k]['lastp'] = traj2[0]
-        k_dict[k]['j'] = 0
-        return k_dict
-    if k_dict[k]['mid_dist'] == 1e10:
-        k_dict = incremental_sp(traj1, traj2, k_dict, k)
-        return k_dict
-    if t2e == t1e:
-        temptraj1 = []
-        temptraj1.append(traj1[i-1])
-        temptraj1.append(traj1[i])
-        temptraj2 = traj2[k_dict[k]['j']:]
-        if traj2[k_dict[k]['j']].t<=k_dict[k]['lastp'].t:
-            temptraj2[0]= k_dict[k]['lastp']
-        else:
-            temptraj2.insert(0,k_dict[k]['lastp'])
+# Type alias for the per-cluster state dict used during incremental IED.
+# Keys: 'mid_dist', 'real_dist', 'lastp', 'j'
+IncrementalState = Dict[int, Dict[str, Any]]
 
-        d = k_dict[k]['mid_dist'] + traj2trajIED(temptraj1,temptraj2)
-        k_dict[k]['mid_dist'] = d
-        k_dict[k]['real_dist'] = k_dict[k]['mid_dist']
-        k_dict[k]['lastp'] = traj2[-1]
-        k_dict[k]['j'] = len(traj2)-1
-        return k_dict
-    if t2e < t1e and t2e > traj1[i-1].t:
-        temptraj1 = []
-        temptraj1.append(traj1[i-1])
-        temptraj1.append(traj1[i])
-        temptraj2 = traj2[k_dict[k]['j']:]
-        if traj2[k_dict[k]['j']].t<=k_dict[k]['lastp'].t:
-            temptraj2[0]= k_dict[k]['lastp']
-        else:
-            temptraj2.insert(0,k_dict[k]['lastp'])
-        d = traj2trajIED(temptraj1, temptraj2)
-        lastp = Point(traj2[-1].x, traj2[-1].y, t1e)
-        k_dict[k]['mid_dist'] = k_dict[k]['mid_dist'] + d
-        k_dict[k]['real_dist'] = k_dict[k]['mid_dist']
-        k_dict[k]['lastp'] = lastp
-        k_dict[k]['j'] = len(traj2) -1
-        return k_dict
-    if t2e < t1e and t2e <= traj1[i-1].t:
-        newp = Point(traj2[-1].x, traj2[-1].y, t1e)
-        d = line2lineIDE(traj1[i-1], traj1[i], k_dict[k]['lastp'], newp)
-        k_dict[k]['mid_dist'] = k_dict[k]['mid_dist'] + d
-        k_dict[k]['real_dist'] = k_dict[k]['mid_dist']
-        k_dict[k]['lastp'] = newp
-        k_dict[k]['j'] = len(traj2) - 1
-        return k_dict
-    if t1e < t2e:
-        e_i = len(traj2)-1
-        while traj2[e_i].t > t1e:
-            e_i -= 1
-        if traj2[e_i].t == t1e:
-            lastp = traj2[e_i]
-            front_traj2 = traj2[k_dict[k]['j']:e_i+1]
-            if k_dict[k]['lastp'].t >= front_traj2[0].t:
-                front_traj2[0]=k_dict[k]['lastp']
-            else:
-                front_traj2.insert(0, k_dict[k]['lastp'])
-            midtraj1 = []
-            midtraj1.append(traj1[i-1])
-            midtraj1.append(traj1[i])
-            mid_dist = traj2trajIED(midtraj1, front_traj2)
-            back_traj2 = traj2[e_i:]
-            back_dist = getstaticIED(back_traj2, traj1[-1].x, traj1[-1].y, t1e, t2e)
 
-            k_dict[k]['mid_dist'] = k_dict[k]['mid_dist']+ mid_dist
-            k_dict[k]['real_dist'] = k_dict[k]['mid_dist'] + back_dist
-            k_dict[k]['lastp'] = lastp
-            k_dict[k]['j'] = e_i
-        if traj2[e_i].t < t1e:
-            front_traj2 = traj2[k_dict[k]['j']:e_i + 1]
-            if k_dict[k]['lastp'].t >= front_traj2[0].t:
-                front_traj2[0]=k_dict[k]['lastp']
-            else:
-                front_traj2.insert(0, k_dict[k]['lastp'])
+# ─── Incremental IED: first point (start-point) ───────────────────────
 
-            x = makemid(traj2[e_i].x, traj2[e_i].t, traj2[e_i + 1].x, traj2[e_i + 1].t, t1e)
-            y = makemid(traj2[e_i].y, traj2[e_i].t, traj2[e_i + 1].y, traj2[e_i + 1].t, t1e)
-            lastp = Point(x, y, t1e)
-            front_traj2.append(lastp)
-            back_traj2 = traj2[e_i + 1:]
-            back_traj2.insert(0, lastp)
-            temptraj1 = []
-            temptraj1.append(traj1[i-1])
-            temptraj1.append(traj1[i])
-            mid_dist = traj2trajIED(temptraj1, front_traj2)
-            back_dist = getstaticIED(back_traj2, traj1[-1].x, traj1[-1].y, t1e, t2e)
-            k_dict[k]['mid_dist'] = k_dict[k]['mid_dist'] + mid_dist
-            k_dict[k]['real_dist'] = k_dict[k]['mid_dist'] + back_dist
-            k_dict[k]['lastp'] = lastp
-            k_dict[k]['j'] = e_i
+
+def incremental_sp(
+    traj_points_a: List[Point],
+    center_points: List[Point],
+    k_dict: IncrementalState,
+    cluster_id: int,
+) -> IncrementalState:
+    """Compute IED from a sub-trajectory to a cluster center from scratch.
+
+    Called when the current sub-trajectory has just one segment (i.e. the
+    agent just started a new segment).  Sets up the ``k_dict[cluster_id]``
+    cache with:
+
+    - ``mid_dist``: IED over the overlapping portion
+    - ``real_dist``: IED including non-overlapping tail
+    - ``lastp``: the boundary point where overlap ends
+    - ``j``: index into ``center_points`` at that boundary
+
+    Args:
+        traj_points_a: Points of the current sub-trajectory.
+        center_points: Points of the cluster center.
+        k_dict: Mutable dictionary of per-cluster incremental state.
+        cluster_id: Which cluster's state to update.
+
+    Returns:
+        The updated ``k_dict``.
+    """
+    time_a_start = traj_points_a[0].t
+    time_a_end = traj_points_a[-1].t
+    time_c_start = center_points[0].t
+    time_c_end = center_points[-1].t
+
+    # No temporal overlap
+    if time_a_start >= time_c_end or time_a_end <= time_c_start:
+        k_dict[cluster_id]['mid_dist'] = 1e10
+        k_dict[cluster_id]['real_dist'] = 1e10
+        k_dict[cluster_id]['lastp'] = center_points[0]
+        k_dict[cluster_id]['j'] = 0
         return k_dict
 
-def incremental_IED(traj1, traj2, k_dict, k, i, sp_i):
-    if i == sp_i + 1 : 
-        k_dict = incremental_sp(traj1, traj2, k_dict, k)
-    else:
-        k_dict = incremental_nsp(traj1, traj2, k_dict, k, i)
+    last_center_idx = len(center_points) - 1
+
+    if time_a_end >= time_c_end:
+        # Sub-trajectory covers the entire center temporally
+        full_dist = traj2trajIED(traj_points_a, center_points)
+        k_dict[cluster_id]['mid_dist'] = full_dist
+        k_dict[cluster_id]['real_dist'] = full_dist
+        k_dict[cluster_id]['lastp'] = Point(
+            center_points[-1].x, center_points[-1].y, time_a_end,
+        )
+        k_dict[cluster_id]['j'] = len(center_points) - 1
+        return k_dict
+
+    # Center extends beyond sub-trajectory — split at time_a_end
+    while center_points[last_center_idx].t > time_a_end:
+        last_center_idx -= 1
+
+    if center_points[last_center_idx].t == time_a_end:
+        # Exact match — no interpolation needed
+        boundary_point = center_points[last_center_idx]
+        front_center = center_points[:last_center_idx + 1]
+        overlap_dist = traj2trajIED(traj_points_a, front_center)
+
+        back_center = center_points[last_center_idx:]
+        tail_dist = getstaticIED(
+            back_center,
+            traj_points_a[-1].x, traj_points_a[-1].y,
+            time_a_end, time_c_end,
+        )
+
+        k_dict[cluster_id]['mid_dist'] = overlap_dist
+        k_dict[cluster_id]['real_dist'] = overlap_dist + tail_dist
+        k_dict[cluster_id]['lastp'] = boundary_point
+        k_dict[cluster_id]['j'] = last_center_idx
+
+    if center_points[last_center_idx].t < time_a_end:
+        # Need to interpolate a boundary point on the center
+        front_center = center_points[:last_center_idx + 1]
+        interp_x = makemid(
+            center_points[last_center_idx].x, center_points[last_center_idx].t,
+            center_points[last_center_idx + 1].x, center_points[last_center_idx + 1].t,
+            time_a_end,
+        )
+        interp_y = makemid(
+            center_points[last_center_idx].y, center_points[last_center_idx].t,
+            center_points[last_center_idx + 1].y, center_points[last_center_idx + 1].t,
+            time_a_end,
+        )
+        boundary_point = Point(interp_x, interp_y, time_a_end)
+        front_center.append(boundary_point)
+
+        back_center = center_points[last_center_idx + 1:]
+        back_center.insert(0, boundary_point)
+
+        overlap_dist = traj2trajIED(traj_points_a, front_center)
+        tail_dist = getstaticIED(
+            back_center,
+            traj_points_a[-1].x, traj_points_a[-1].y,
+            time_a_end, time_c_end,
+        )
+
+        k_dict[cluster_id]['mid_dist'] = overlap_dist
+        k_dict[cluster_id]['real_dist'] = overlap_dist + tail_dist
+        k_dict[cluster_id]['lastp'] = boundary_point
+        k_dict[cluster_id]['j'] = last_center_idx
+
     return k_dict
 
-def incremental_mindist(trajectory, start_index, current_index, k_dict, cluster_dict, episode): 
-    min_dist = 1e10
-    cluster_id = -1
 
-    count = 0
-    traj_points = trajectory.points[start_index:current_index+1]
-    s_i = 0
-    c_i = current_index - start_index
-    
-    for i in cluster_dict.keys(): 
-        center = cluster_dict[i][2]
-        if len(center) == 0:
+# ─── Incremental IED: subsequent points (non-start-point) ─────────────
+
+
+def incremental_nsp(
+    traj_points_a: List[Point],
+    center_points: List[Point],
+    k_dict: IncrementalState,
+    cluster_id: int,
+    point_index: int,
+) -> IncrementalState:
+    """Incrementally update IED after the sub-trajectory gains one more point.
+
+    Instead of recomputing the full IED, this function only computes the
+    distance contribution of the newly added segment
+    ``[traj_points_a[i-1], traj_points_a[i]]`` and adds it to the cached
+    partial distance in ``k_dict``.
+
+    Args:
+        traj_points_a: Points of the current sub-trajectory.
+        center_points: Points of the cluster center.
+        k_dict: Mutable per-cluster incremental state.
+        cluster_id: Which cluster's state to update.
+        point_index: Index of the newly added point in ``traj_points_a``.
+
+    Returns:
+        The updated ``k_dict``.
+    """
+    time_a_start = traj_points_a[0].t
+    time_a_end = traj_points_a[-1].t
+    time_c_start = center_points[0].t
+    time_c_end = center_points[-1].t
+
+    # No temporal overlap
+    if time_a_start >= time_c_end or time_a_end <= time_c_start:
+        k_dict[cluster_id]['mid_dist'] = 1e10
+        k_dict[cluster_id]['real_dist'] = 1e10
+        k_dict[cluster_id]['lastp'] = center_points[0]
+        k_dict[cluster_id]['j'] = 0
+        return k_dict
+
+    # If previous distance was infinite, compute from scratch
+    if k_dict[cluster_id]['mid_dist'] == 1e10:
+        return incremental_sp(traj_points_a, center_points, k_dict, cluster_id)
+
+    # Build the new single-segment sub-trajectory
+    new_segment = [traj_points_a[point_index - 1], traj_points_a[point_index]]
+
+    if time_c_end == time_a_end:
+        # Center ends exactly where sub-trajectory ends
+        remaining_center = center_points[k_dict[cluster_id]['j']:]
+        cached_boundary = k_dict[cluster_id]['lastp']
+        if center_points[k_dict[cluster_id]['j']].t <= cached_boundary.t:
+            remaining_center[0] = cached_boundary
+        else:
+            remaining_center.insert(0, cached_boundary)
+
+        incremental_dist = traj2trajIED(new_segment, remaining_center)
+        k_dict[cluster_id]['mid_dist'] += incremental_dist
+        k_dict[cluster_id]['real_dist'] = k_dict[cluster_id]['mid_dist']
+        k_dict[cluster_id]['lastp'] = center_points[-1]
+        k_dict[cluster_id]['j'] = len(center_points) - 1
+        return k_dict
+
+    if time_c_end < time_a_end and time_c_end > traj_points_a[point_index - 1].t:
+        # Center ends within the new segment
+        remaining_center = center_points[k_dict[cluster_id]['j']:]
+        cached_boundary = k_dict[cluster_id]['lastp']
+        if center_points[k_dict[cluster_id]['j']].t <= cached_boundary.t:
+            remaining_center[0] = cached_boundary
+        else:
+            remaining_center.insert(0, cached_boundary)
+
+        incremental_dist = traj2trajIED(new_segment, remaining_center)
+        static_boundary = Point(center_points[-1].x, center_points[-1].y, time_a_end)
+        k_dict[cluster_id]['mid_dist'] += incremental_dist
+        k_dict[cluster_id]['real_dist'] = k_dict[cluster_id]['mid_dist']
+        k_dict[cluster_id]['lastp'] = static_boundary
+        k_dict[cluster_id]['j'] = len(center_points) - 1
+        return k_dict
+
+    if time_c_end < time_a_end and time_c_end <= traj_points_a[point_index - 1].t:
+        # Center already ended before the new segment
+        static_boundary = Point(center_points[-1].x, center_points[-1].y, time_a_end)
+        segment_dist = line2lineIDE(
+            traj_points_a[point_index - 1], traj_points_a[point_index],
+            k_dict[cluster_id]['lastp'], static_boundary,
+        )
+        k_dict[cluster_id]['mid_dist'] += segment_dist
+        k_dict[cluster_id]['real_dist'] = k_dict[cluster_id]['mid_dist']
+        k_dict[cluster_id]['lastp'] = static_boundary
+        k_dict[cluster_id]['j'] = len(center_points) - 1
+        return k_dict
+
+    if time_a_end < time_c_end:
+        # Sub-trajectory ends before center — split center at time_a_end
+        end_idx = len(center_points) - 1
+        while center_points[end_idx].t > time_a_end:
+            end_idx -= 1
+
+        # Build the center slice from cached boundary to end_idx
+        front_center = center_points[k_dict[cluster_id]['j']:end_idx + 1]
+        cached_boundary = k_dict[cluster_id]['lastp']
+        if cached_boundary.t >= front_center[0].t:
+            front_center[0] = cached_boundary
+        else:
+            front_center.insert(0, cached_boundary)
+
+        if center_points[end_idx].t == time_a_end:
+            boundary_point = center_points[end_idx]
+            overlap_dist = traj2trajIED(new_segment, front_center)
+
+            back_center = center_points[end_idx:]
+            tail_dist = getstaticIED(
+                back_center,
+                traj_points_a[-1].x, traj_points_a[-1].y,
+                time_a_end, time_c_end,
+            )
+
+            k_dict[cluster_id]['mid_dist'] += overlap_dist
+            k_dict[cluster_id]['real_dist'] = k_dict[cluster_id]['mid_dist'] + tail_dist
+            k_dict[cluster_id]['lastp'] = boundary_point
+            k_dict[cluster_id]['j'] = end_idx
+
+        if center_points[end_idx].t < time_a_end:
+            # Interpolate boundary on center
+            interp_x = makemid(
+                center_points[end_idx].x, center_points[end_idx].t,
+                center_points[end_idx + 1].x, center_points[end_idx + 1].t,
+                time_a_end,
+            )
+            interp_y = makemid(
+                center_points[end_idx].y, center_points[end_idx].t,
+                center_points[end_idx + 1].y, center_points[end_idx + 1].t,
+                time_a_end,
+            )
+            boundary_point = Point(interp_x, interp_y, time_a_end)
+            front_center.append(boundary_point)
+
+            back_center = center_points[end_idx + 1:]
+            back_center.insert(0, boundary_point)
+
+            overlap_dist = traj2trajIED(new_segment, front_center)
+            tail_dist = getstaticIED(
+                back_center,
+                traj_points_a[-1].x, traj_points_a[-1].y,
+                time_a_end, time_c_end,
+            )
+
+            k_dict[cluster_id]['mid_dist'] += overlap_dist
+            k_dict[cluster_id]['real_dist'] = k_dict[cluster_id]['mid_dist'] + tail_dist
+            k_dict[cluster_id]['lastp'] = boundary_point
+            k_dict[cluster_id]['j'] = end_idx
+
+        return k_dict
+
+    return k_dict
+
+
+# ─── IED dispatch: start-point vs. non-start-point ────────────────────
+
+
+def incremental_IED(
+    traj_points_a: List[Point],
+    center_points: List[Point],
+    k_dict: IncrementalState,
+    cluster_id: int,
+    point_index: int,
+    start_point_index: int,
+) -> IncrementalState:
+    """Dispatch to start-point or non-start-point incremental IED.
+
+    On the first extension (``point_index == start_point_index + 1``),
+    calls :func:`incremental_sp`.  Otherwise calls :func:`incremental_nsp`.
+
+    Args:
+        traj_points_a: Points of the current sub-trajectory.
+        center_points: Points of the cluster center.
+        k_dict: Per-cluster incremental state.
+        cluster_id: Which cluster to update.
+        point_index: Current point index in the sub-trajectory.
+        start_point_index: Index where the current segment started.
+
+    Returns:
+        Updated ``k_dict``.
+    """
+    if point_index == start_point_index + 1:
+        return incremental_sp(traj_points_a, center_points, k_dict, cluster_id)
+    return incremental_nsp(traj_points_a, center_points, k_dict, cluster_id, point_index)
+
+
+# ─── Find nearest cluster ─────────────────────────────────────────────
+
+
+def incremental_mindist(
+    trajectory: Traj,
+    start_index: int,
+    current_index: int,
+    k_dict: IncrementalState,
+    cluster_dict: Dict[int, list],
+    episode: int,
+) -> Tuple[float, int]:
+    """Find the cluster whose center is closest to the current sub-trajectory.
+
+    Iterates over all clusters, incrementally updating the IED for each,
+    and returns the minimum distance and corresponding cluster ID.
+
+    Args:
+        trajectory: The full trajectory being segmented.
+        start_index: Point index where the current segment starts.
+        current_index: Point index of the segment's current endpoint.
+        k_dict: Per-cluster incremental state dictionary.
+        cluster_dict: Full cluster dictionary (see module docstring).
+        episode: Episode index (unused, kept for API compatibility).
+
+    Returns:
+        Tuple of ``(min_distance, best_cluster_id)``.
+    """
+    min_distance = 1e10
+    best_cluster_id = -1
+
+    sub_traj_points = trajectory.points[start_index:current_index + 1]
+    relative_current = current_index - start_index
+
+    for count, cluster_id in enumerate(cluster_dict.keys()):
+        center_points = cluster_dict[cluster_id][2]
+        if len(center_points) == 0:
             continue
-        dicts = incremental_IED(traj_points,center,k_dict,i,c_i,s_i)
-        
-        if count == 0: 
-            min_dist = dicts[i]['real_dist']
-            cluster_id = i
+
+        k_dict = incremental_IED(
+            sub_traj_points, center_points, k_dict,
+            cluster_id, relative_current, 0,
+        )
+
+        candidate_dist = k_dict[cluster_id]['real_dist']
+        if count == 0 or candidate_dist < min_distance:
+            min_distance = candidate_dist
+            best_cluster_id = cluster_id
+
+    return min_distance, best_cluster_id
+
+
+# ─── Cluster dictionary maintenance ───────────────────────────────────
+
+
+def add2clusdict(
+    points: List[Point],
+    cluster_dict: Dict[int, list],
+    cluster_id: int,
+) -> None:
+    """Add a sub-trajectory's points to the cluster's time-point dictionary.
+
+    Updates ``cluster_dict[cluster_id][3]``, a dictionary mapping
+    timestamps to ``[point_list, overlap_count, sum_x, sum_y]``.
+    This is used later by :func:`computecenter` to produce a new
+    representative center trajectory.
+
+    Args:
+        points: Points of the sub-trajectory to add.
+        cluster_dict: Full cluster dictionary (mutated in place).
+        cluster_id: Target cluster to add points to.
+    """
+    time_dict = cluster_dict[cluster_id][3]
+
+    # Increment overlap count for existing timestamps within range
+    for timestamp in time_dict.keys():
+        if timestamp >= points[0].t and timestamp <= points[-1].t:
+            time_dict[timestamp][1] += 1
+
+    # Add each point
+    for point in points:
+        if point.t not in time_dict:
+            # New timestamp: [point_list, overlap_count, sum_x, sum_y]
+            time_dict[point.t] = [[point], 1, point.x, point.y]
+
+            # Count how many existing sub-trajectories overlap this timestamp
+            for existing_traj in cluster_dict[cluster_id][1][:-1]:
+                if point.t >= existing_traj.ts and point.t <= existing_traj.te:
+                    time_dict[point.t][1] += 1
         else:
-            if dicts[i]['real_dist'] < min_dist: 
-                min_dist = dicts[i]['real_dist']
-                cluster_id = i
-        count += 1
-    return min_dist, cluster_id
+            time_dict[point.t][0].append(point)
+            time_dict[point.t][2] += point.x
+            time_dict[point.t][3] += point.y
 
-def add2clusdict(points, clus_dict,k):
-    for key_t in clus_dict[k][3].keys():
-        if key_t >= points[0].t and key_t <= points[-1].t:
-            clus_dict[k][3][key_t][1] += 1
-    for i in range(len(points)): 
-        curr_t = points[i].t
-        if curr_t not in clus_dict[k][3]:
-            clus_dict[k][3][curr_t]=[[points[i]],1,points[i].x,points[i].y]
-            for j in range(len(clus_dict[k][1]) - 1):
-                traj = clus_dict[k][1][j]
-                if points[i].t >= traj.ts and points[i].t <= traj.te:
-                    clus_dict[k][3][points[i].t][1] += 1
+
+def computecenter(
+    cluster_dict: Dict[int, list],
+    cluster_id: int,
+    threshold_count: int,
+    threshold_time: float,
+) -> List[Point]:
+    """Recompute the representative center trajectory for a cluster.
+
+    Groups timestamps within ``threshold_time`` of each other, averages
+    the coordinates of points falling into each group, and produces a
+    new center trajectory from those averaged points.
+
+    Only timestamps whose overlap count meets ``threshold_count`` are
+    included (or the mean count, if no timestamp meets the threshold).
+
+    Args:
+        cluster_dict: Full cluster dictionary.
+        cluster_id: Which cluster to recompute.
+        threshold_count: Minimum number of overlapping sub-trajectories
+            for a timestamp to be included in center computation.
+        threshold_time: Maximum temporal gap to group timestamps together.
+
+    Returns:
+        New center trajectory as a list of :class:`Point` objects.
+    """
+    time_dict = cluster_dict[cluster_id][3]
+    sorted_timestamps = sorted(time_dict.keys())
+
+    # Filter timestamps by overlap count
+    overlap_counts = [time_dict[ts][1] for ts in sorted_timestamps]
+    qualifying_timestamps = [
+        ts for ts in sorted_timestamps
+        if time_dict[ts][1] >= threshold_count
+    ]
+
+    # Fallback: use timestamps above mean overlap count
+    if len(qualifying_timestamps) == 0:
+        mean_count = np.mean(overlap_counts)
+        qualifying_timestamps = [
+            ts for ts in sorted_timestamps
+            if time_dict[ts][1] >= mean_count
+        ]
+
+    # Group qualifying timestamps and average coordinates
+    center_points: List[Point] = []
+    group_start = 0
+    group_idx = group_start + 1
+    group_point_count = len(time_dict[qualifying_timestamps[group_start]][0])
+    sum_x = time_dict[qualifying_timestamps[group_start]][2]
+    sum_y = time_dict[qualifying_timestamps[group_start]][3]
+    sum_t = qualifying_timestamps[group_start]
+
+    while group_idx < len(qualifying_timestamps):
+        time_gap = qualifying_timestamps[group_idx] - qualifying_timestamps[group_start]
+
+        if time_gap <= threshold_time:
+            # Still within the same temporal group
+            group_point_count += len(time_dict[qualifying_timestamps[group_idx]][0])
+            sum_x += time_dict[qualifying_timestamps[group_idx]][2]
+            sum_y += time_dict[qualifying_timestamps[group_idx]][3]
+            sum_t += qualifying_timestamps[group_idx]
+
+            if group_idx == len(qualifying_timestamps) - 1:
+                # Last timestamp — finalize this group
+                num_timestamps = group_idx - group_start + 1
+                avg_x = sum_x / group_point_count
+                avg_y = sum_y / group_point_count
+                avg_t = sum_t / num_timestamps
+                center_points.append(Point(avg_x, avg_y, avg_t))
+            group_idx += 1
         else:
-            clus_dict[k][3][curr_t][0].append(points[i])
-            clus_dict[k][3][curr_t][2] += points[i].x
-            clus_dict[k][3][curr_t][3] += points[i].y
+            # Finalize current group and start a new one
+            num_timestamps = group_idx - group_start
+            avg_x = sum_x / group_point_count
+            avg_y = sum_y / group_point_count
+            avg_t = sum_t / num_timestamps
+            center_points.append(Point(avg_x, avg_y, avg_t))
 
-def computecenter(clus_dict, k, threshold_num, threshold_t):
-    keys = sorted(clus_dict[k][3].keys())
-    sortkeys, threshold_nums = [], []
-    for key in keys:
-        threshold_nums.append(clus_dict[k][3][key][1])
-        if clus_dict[k][3][key][1] >= threshold_num:
-            sortkeys.append(key)
-    if len(sortkeys) == 0:
-        mean_num = np.mean(threshold_nums)
-        for key in keys:
-            if clus_dict[k][3][key][1] >= mean_num:
-                sortkeys.append(key)
-    start_i = 0
-    i = start_i + 1
-    count = len(clus_dict[k][3][sortkeys[start_i]][0])
-    sum_x, sum_y, sum_t = clus_dict[k][3][sortkeys[start_i]][2], clus_dict[k][3][sortkeys[start_i]][3], sortkeys[start_i]
-    center = []
-    while i < len(sortkeys):
-        if sortkeys[i] - sortkeys[start_i] <= threshold_t:
-            count += len(clus_dict[k][3][sortkeys[i]][0])
-            sum_x += clus_dict[k][3][sortkeys[i]][2]
-            sum_y += clus_dict[k][3][sortkeys[i]][3]
-            sum_t += sortkeys[i]
-            if i == len(sortkeys)-1:
-                count_t = i - start_i + 1
-                aver_x, aver_y, aver_t  = sum_x / count, sum_y / count, sum_t / count_t
-                point = Point(aver_x, aver_y, aver_t)
-                center.append(point)
-            i += 1
-        else:
-            count_t = i - start_i
-            aver_x, aver_y, aver_t = sum_x/count, sum_y/count, sum_t/count_t
-            point = Point(aver_x, aver_y, aver_t)
-            center.append(point)
-            start_i = i
-            i = start_i + 1
-            count = len(clus_dict[k][3][sortkeys[start_i]][0])
-            sum_x, sum_y, sum_t = clus_dict[k][3][sortkeys[start_i]][2], clus_dict[k][3][sortkeys[start_i]][3], sortkeys[start_i]
-    return center
+            group_start = group_idx
+            group_idx = group_start + 1
+            group_point_count = len(time_dict[qualifying_timestamps[group_start]][0])
+            sum_x = time_dict[qualifying_timestamps[group_start]][2]
+            sum_y = time_dict[qualifying_timestamps[group_start]][3]
+            sum_t = qualifying_timestamps[group_start]
 
-def compute_overdist(cluster_dict):
-    count = 0
-    sumval = 0
-    for i in cluster_dict.keys():
-        if len(cluster_dict[i][0])!=0:
-            count += len(cluster_dict[i][0])
-            sumval += sum(cluster_dict[i][0])
-    overdist = sumval/count
-    return overdist
+    return center_points
 
-def compute_overdist_per_point(cluster_dict):
+
+# ─── Overall distance (ValCR) metrics ──────────────────────────────────
+
+
+def compute_overdist(cluster_dict: Dict[int, list]) -> float:
+    """Compute Overall Distance (raw ValCR) across all clusters.
+
+    Averages distance-to-center over all assigned sub-trajectories.
+
+    Args:
+        cluster_dict: Full cluster dictionary.
+
+    Returns:
+        Mean IED across all cluster members.
+    """
+    total_count = 0
+    total_distance = 0.0
+    for cluster_id in cluster_dict.keys():
+        distances = cluster_dict[cluster_id][0]
+        if len(distances) != 0:
+            total_count += len(distances)
+            total_distance += sum(distances)
+    return total_distance / total_count if total_count > 0 else 0.0
+
+
+def compute_overdist_per_point(cluster_dict: Dict[int, list]) -> float:
     """Per-point normalized ValCR: mean of (IED / segment_length).
 
-    Removes length-dependence so short segments don't trivially lower the metric.
-    Requires cluster_dict[i][4] = segment lengths (parallel to [0] distances).
+    Removes length-dependence so short segments don't trivially lower
+    the metric.  Requires ``cluster_dict[i][4]`` to contain segment
+    lengths (parallel to ``[0]`` distances).
+
+    Args:
+        cluster_dict: Full cluster dictionary with segment lengths at index 4.
+
+    Returns:
+        Length-normalized average distance.
     """
     count = 0
-    sumval = 0.0
-    for i in cluster_dict.keys():
-        dists = cluster_dict[i][0]
-        lens = cluster_dict[i][4] if len(cluster_dict[i]) > 4 else []
-        for d, sl in zip(dists, lens):
-            if sl > 0:
-                sumval += d / sl
+    total_normalized = 0.0
+    for cluster_id in cluster_dict.keys():
+        distances = cluster_dict[cluster_id][0]
+        segment_lengths = cluster_dict[cluster_id][4] if len(cluster_dict[cluster_id]) > 4 else []
+        for dist, seg_len in zip(distances, segment_lengths):
+            if seg_len > 0:
+                total_normalized += dist / seg_len
                 count += 1
-    return sumval / count if count > 0 else 0.0
+    return total_normalized / count if count > 0 else 0.0
 
-def compute_overdist_length_weighted(cluster_dict):
+
+def compute_overdist_length_weighted(cluster_dict: Dict[int, list]) -> float:
     """Length-weighted ValCR: total_IED / total_points.
 
     Equivalent to per-point average distance to nearest center.
     Robust to segment count inflation.
-    """
-    total_dist = 0.0
-    total_points = 0
-    for i in cluster_dict.keys():
-        dists = cluster_dict[i][0]
-        lens = cluster_dict[i][4] if len(cluster_dict[i]) > 4 else []
-        total_dist += sum(dists) if dists else 0.0
-        total_points += sum(lens) if lens else 0
-    return total_dist / total_points if total_points > 0 else 0.0
 
-def update_centers(cluster_dict, threshold_num, threshold_t):
-    for i in cluster_dict.keys():
-        if len(cluster_dict[i][0])!=0:
-            center = computecenter(cluster_dict,i,threshold_num, threshold_t)
-            if len(center) != 0:
-                cluster_dict[i][2] = center
-    overdist = compute_overdist(cluster_dict)
-    return overdist, cluster_dict
-    
+    Args:
+        cluster_dict: Full cluster dictionary with segment lengths at index 4.
+
+    Returns:
+        Total IED divided by total point count.
+    """
+    total_distance = 0.0
+    total_points = 0
+    for cluster_id in cluster_dict.keys():
+        distances = cluster_dict[cluster_id][0]
+        segment_lengths = cluster_dict[cluster_id][4] if len(cluster_dict[cluster_id]) > 4 else []
+        total_distance += sum(distances) if distances else 0.0
+        total_points += sum(segment_lengths) if segment_lengths else 0
+    return total_distance / total_points if total_points > 0 else 0.0
+
+
+# ─── Cluster center re-estimation ─────────────────────────────────────
+
+
+def update_centers(
+    cluster_dict: Dict[int, list],
+    threshold_count: int,
+    threshold_time: float,
+) -> Tuple[float, Dict[int, list]]:
+    """Recompute all cluster centers and return updated overall distance.
+
+    For each cluster with assigned sub-trajectories, recomputes the
+    representative center trajectory via :func:`computecenter`.
+
+    Args:
+        cluster_dict: Full cluster dictionary (mutated in place).
+        threshold_count: Minimum overlap count for center computation.
+        threshold_time: Maximum time gap for grouping timestamps.
+
+    Returns:
+        Tuple of ``(overall_distance, cluster_dict)``.
+    """
+    for cluster_id in cluster_dict.keys():
+        if len(cluster_dict[cluster_id][0]) != 0:
+            new_center = computecenter(cluster_dict, cluster_id, threshold_count, threshold_time)
+            if len(new_center) != 0:
+                cluster_dict[cluster_id][2] = new_center
+
+    overall_distance = compute_overdist(cluster_dict)
+    return overall_distance, cluster_dict

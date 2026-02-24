@@ -135,7 +135,7 @@ PROTOCOL = {
 @dataclass
 class ModelSpec:
     name: str
-    kind: str           # "quantum" or "classical"
+    kind: str           # "quantum", "classical" (SPSA), or "adam" (backprop)
     hidden_sizes: list = field(default_factory=list)
     n_layers: int = 3
     shots: int = 0      # 0 = statevector
@@ -165,6 +165,28 @@ def build_agent(spec: ModelSpec, seed: int):
             from q_rlstc.quantum.backends import get_backend
             backend = get_backend(mode="noisy_sim", noise_model_name=spec.noise_model)
         return VQDQNAgent(config=cfg, backend=backend, seed=seed)
+    elif spec.kind == "adam":
+        from q_rlstc.rl.adam_classical_agent import AdamClassicalDQN, AdamAgentConfig
+        cfg = AdamAgentConfig(
+            hidden_sizes=spec.hidden_sizes,
+            gamma=PROTOCOL["gamma"],
+            epsilon_start=PROTOCOL["epsilon_start"],
+            epsilon_min=PROTOCOL["epsilon_min"],
+            epsilon_decay=PROTOCOL["epsilon_decay"],
+            use_double_dqn=True,
+            target_update_freq=PROTOCOL["target_update_freq"],
+        )
+        return AdamClassicalDQN(config=cfg, seed=seed)
+    elif spec.kind == "original":
+        from q_rlstc.rl.original_classical_agent import OriginalClassicalDQN, OriginalAgentConfig
+        cfg = OriginalAgentConfig(
+            hidden_size=64,
+            gamma=PROTOCOL["gamma"],
+            epsilon_start=PROTOCOL["epsilon_start"],
+            epsilon_min=PROTOCOL["epsilon_min"],
+            epsilon_decay=PROTOCOL["epsilon_decay"],
+        )
+        return OriginalClassicalDQN(config=cfg, seed=seed)
     else:
         from q_rlstc.rl.spsa_classical_agent import SPSAClassicalDQN, ClassicalAgentConfig
         cfg = ClassicalAgentConfig(
@@ -463,9 +485,14 @@ def get_e1_specs():
     """E1 — Core Quantum Utility (all models, noiseless)."""
     return [
         ModelSpec("VQ-DQN (5q×3L)",     "quantum", n_layers=3),
+        # SPSA-optimized controls (same optimizer as quantum)
         ModelSpec("Control A (linear)",  "classical", hidden_sizes=[]),
         ModelSpec("Control B (h=64)",    "classical", hidden_sizes=[64]),
         ModelSpec("Control C (h=32×32)", "classical", hidden_sizes=[32, 32]),
+        # Adam-optimized controls (backprop — removes SPSA handicap objection)
+        ModelSpec("Control D (Adam linear)",  "adam", hidden_sizes=[]),
+        ModelSpec("Control E (Adam h=64)",    "adam", hidden_sizes=[64]),
+        ModelSpec("Control F (Adam h=32×32)", "adam", hidden_sizes=[32, 32]),
     ]
 
 def get_e2_specs():

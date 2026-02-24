@@ -1,6 +1,5 @@
 # Distance Estimation & Clustering
 
-[← Back to README](../../README.md) · [Training Pipeline](training_pipeline.md) · **Distance & Clustering** · [Justifications →](justifications.md)
 
 ---
 

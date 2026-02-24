@@ -1,6 +1,5 @@
 # Quantum Circuit Design
 
-[← Back to README](../../README.md) · [MDP & Rewards](mdp_and_rewards.md) · **Circuit Design** · [Training Pipeline →](training_pipeline.md)
 
 ---
 

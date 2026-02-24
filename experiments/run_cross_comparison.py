@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Cross-system comparison: RLSTCcode (classical MLP) vs Q-RLSTC (VQC).
 
-Runs both systems on the same T-Drive data with matched hyperparameters.
-The ONLY intentional difference is the function approximator:
-  - Classical: 5→64→2 MLP, SGD, ~450 params  (pure NumPy — no TensorFlow)
-  - Quantum D: 5q × 3-layer VQC, SPSA, 30 params
+Runs up to 4 agent types on the same T-Drive data with matched hyperparameters:
+  - OriginalClassicalDQN: 5→64→2 MLP, SGD, ~458 params (faithful RLSTCcode)
+  - AdamClassicalDQN:     5→64→2 MLP, Adam, ~514 params (modern optimizer)
+  - SPSAClassicalDQN:     5→64→2 MLP, SPSA, ~514 params (same optimizer as VQ-DQN)
+  - VQ-DQN:               5q × 3L VQC, SPSA, 34 params (quantum circuit)
 
 Usage::
 
     python experiments/run_cross_comparison.py \\
-        --traj-path  ../RLSTCcode/data/Tdrive_norm_traj \\
-        --centers-path ../RLSTCcode/data/tdrive_clustercenter \\
+        --traj-path  q_rlstc/data/Tdrive_norm_traj \\
+        --centers-path q_rlstc/data/tdrive_clustercenter \\
         --amount 500 \\
-        --output-dir results/cross_comparison
+        --output-dir results/cross_comparison \\
+        --run all
 """
 
 import argparse
@@ -33,9 +35,12 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _DATA_DIR = _PROJECT_ROOT / "q_rlstc" / "data"
 sys.path.insert(0, str(_PROJECT_ROOT))
 
+# Import the canonical OriginalClassicalDQN from the rl module
+from q_rlstc.rl.original_classical_agent import OriginalClassicalDQN
+
 
 # ═══════════════════════════════════════════════════════════════════════
-# Pure-NumPy classical DQN  (replaces TensorFlow-based rl_nn.py)
+# Legacy NumpyDQN kept for backward compatibility — delegates to OriginalClassicalDQN
 # ═══════════════════════════════════════════════════════════════════════
 
 class NumpyDQN:
@@ -715,9 +720,233 @@ def compare_results(classical: dict, quantum: dict, output_dir: Path):
 # Main
 # ---------------------------------------------------------------------------
 
+def run_adam_experiment(
+    traj_path: str,
+    centers_path: str,
+    amount: int,
+    output_dir: Path,
+    seed: int = 1,
+) -> dict:
+    """Run AdamClassicalDQN (modern optimizer, same architecture)."""
+    from q_rlstc.data.rlstc_mdp import TrajRLclus
+    from q_rlstc.data.rlstc_cluster import compute_overdist
+    from q_rlstc.rl.adam_classical_agent import AdamClassicalDQN, AdamAgentConfig
+    from q_rlstc.rl.replay_buffer import ReplayBuffer
+
+    print("\n" + "=" * 60)
+    print("  ADAM EXPERIMENT (Adam MLP 5→64→2)")
+    print("=" * 60)
+
+    np.random.seed(seed)
+    random.seed(seed)
+
+    env = TrajRLclus(traj_path, centers_path, centers_path)
+    cfg = AdamAgentConfig(hidden_sizes=[64])
+    agent = AdamClassicalDQN(config=cfg, seed=seed)
+    buf = ReplayBuffer(capacity=5000, seed=seed)
+
+    _ied_scale = max(env.basesim_T, 1e-8)
+    L_MIN, CUT_PENALTY, EXTEND_COST = 3, 0.12, 0.01
+
+    validation_pct = 0.1
+    sidx = int(amount * (1 - validation_pct))
+    n_rounds = 2
+    batch_size = 32
+    start_time = time.time()
+    best_val_cr = float("inf")
+    results = {"system": "adam_classical", "param_count": agent.n_params}
+
+    for round_num in range(n_rounds):
+        idxlist = list(range(amount))
+        random.shuffle(idxlist)
+        for episode in idxlist:
+            obs, steps = env.reset(episode, 'T')
+            obs = obs.copy().flatten()
+            obs[:3] /= _ied_scale
+            seg_len = 0
+            for idx in range(1, steps):
+                done = (idx == steps - 1)
+                seg_len += 1
+                action = agent.act(obs.reshape(1, -1))
+                if action == 1 and seg_len < L_MIN:
+                    action = 0
+                obs_next, raw_r = env.step(episode, action, idx, 'T')
+                obs_next = obs_next.copy().flatten()
+                obs_next[:3] /= _ied_scale
+                reward = float(np.clip(raw_r / _ied_scale, -1, 1))
+                if action == 1:
+                    reward -= CUT_PENALTY
+                    seg_len = 0
+                else:
+                    reward -= EXTEND_COST
+                buf.push(obs, action, reward, obs_next, done)
+                if done:
+                    break
+                if len(buf) >= batch_size:
+                    batch = buf.sample(batch_size)
+                    s = np.array([e.state for e in batch])
+                    a = np.array([e.action for e in batch])
+                    r = np.array([e.reward for e in batch])
+                    ns = np.array([e.next_state for e in batch])
+                    d = np.array([e.done for e in batch], dtype=float)
+                    agent.update(s, a, r, ns, d)
+                obs = obs_next
+        agent.decay_epsilon()
+
+        # Eval
+        for e in range(sidx, amount):
+            o, steps = env.reset(e, 'E')
+            o = o.copy().flatten()
+            o[:3] /= _ied_scale
+            for idx in range(1, steps):
+                q = agent.get_q_values(o.reshape(1, -1))
+                a = int(np.argmax(q))
+                o, _ = env.step(e, a, idx, 'E')
+                o = o.copy().flatten()
+                o[:3] /= _ied_scale
+        try:
+            val_cr = float(compute_overdist(env.clusters_E) / env.basesim_E)
+        except (ZeroDivisionError, ValueError):
+            val_cr = float('inf')
+        if val_cr < best_val_cr:
+            best_val_cr = val_cr
+        print(f"  Round {round_num}: val_cr={val_cr:.4f}")
+        for i in env.clusters_E.keys():
+            env.clusters_E[i][0], env.clusters_E[i][1] = [], []
+            env.clusters_E[i][3] = defaultdict(list)
+        env.update_cluster('T')
+
+    results["final_validation_cr"] = best_val_cr
+    results["elapsed_time"] = time.time() - start_time
+    return results
+
+
+def run_spsa_classical_experiment(
+    traj_path: str,
+    centers_path: str,
+    amount: int,
+    output_dir: Path,
+    seed: int = 1,
+) -> dict:
+    """Run SPSAClassicalDQN (same optimizer as quantum)."""
+    from q_rlstc.data.rlstc_mdp import TrajRLclus
+    from q_rlstc.data.rlstc_cluster import compute_overdist
+    from q_rlstc.rl.spsa_classical_agent import SPSAClassicalDQN, ClassicalAgentConfig
+    from q_rlstc.rl.replay_buffer import ReplayBuffer
+
+    print("\n" + "=" * 60)
+    print("  SPSA CLASSICAL EXPERIMENT (SPSA MLP 5→64→2)")
+    print("=" * 60)
+
+    np.random.seed(seed)
+    random.seed(seed)
+
+    env = TrajRLclus(traj_path, centers_path, centers_path)
+    cfg = ClassicalAgentConfig(hidden_sizes=[64])
+    agent = SPSAClassicalDQN(config=cfg, seed=seed)
+    buf = ReplayBuffer(capacity=5000, seed=seed)
+
+    _ied_scale = max(env.basesim_T, 1e-8)
+    L_MIN, CUT_PENALTY, EXTEND_COST = 3, 0.12, 0.01
+
+    validation_pct = 0.1
+    sidx = int(amount * (1 - validation_pct))
+    n_rounds = 2
+    batch_size = 32
+    start_time = time.time()
+    best_val_cr = float("inf")
+    results = {"system": "spsa_classical", "param_count": agent.n_params}
+
+    for round_num in range(n_rounds):
+        idxlist = list(range(amount))
+        random.shuffle(idxlist)
+        for episode in idxlist:
+            obs, steps = env.reset(episode, 'T')
+            obs = obs.copy().flatten()
+            obs[:3] /= _ied_scale
+            seg_len = 0
+            for idx in range(1, steps):
+                done = (idx == steps - 1)
+                seg_len += 1
+                action = agent.act(obs.reshape(1, -1))
+                if action == 1 and seg_len < L_MIN:
+                    action = 0
+                obs_next, raw_r = env.step(episode, action, idx, 'T')
+                obs_next = obs_next.copy().flatten()
+                obs_next[:3] /= _ied_scale
+                reward = float(np.clip(raw_r / _ied_scale, -1, 1))
+                if action == 1:
+                    reward -= CUT_PENALTY
+                    seg_len = 0
+                else:
+                    reward -= EXTEND_COST
+                buf.push(obs, action, reward, obs_next, done)
+                if done:
+                    break
+                if len(buf) >= batch_size:
+                    batch = buf.sample(batch_size)
+                    s = np.array([e.state for e in batch])
+                    a = np.array([e.action for e in batch])
+                    r = np.array([e.reward for e in batch])
+                    ns = np.array([e.next_state for e in batch])
+                    d = np.array([e.done for e in batch], dtype=float)
+                    agent.update(s, a, r, ns, d)
+                obs = obs_next
+        agent.decay_epsilon()
+
+        for e in range(sidx, amount):
+            o, steps = env.reset(e, 'E')
+            o = o.copy().flatten()
+            o[:3] /= _ied_scale
+            for idx in range(1, steps):
+                q = agent.get_q_values(o.reshape(1, -1))
+                a = int(np.argmax(q))
+                o, _ = env.step(e, a, idx, 'E')
+                o = o.copy().flatten()
+                o[:3] /= _ied_scale
+        try:
+            val_cr = float(compute_overdist(env.clusters_E) / env.basesim_E)
+        except (ZeroDivisionError, ValueError):
+            val_cr = float('inf')
+        if val_cr < best_val_cr:
+            best_val_cr = val_cr
+        print(f"  Round {round_num}: val_cr={val_cr:.4f}")
+        for i in env.clusters_E.keys():
+            env.clusters_E[i][0], env.clusters_E[i][1] = [], []
+            env.clusters_E[i][3] = defaultdict(list)
+        env.update_cluster('T')
+
+    results["final_validation_cr"] = best_val_cr
+    results["elapsed_time"] = time.time() - start_time
+    return results
+
+
+def compare_all_results(all_results: dict, output_dir: Path):
+    """Compare and report on all agent experiments."""
+    print("\n" + "=" * 80)
+    print("  CROSS-SYSTEM COMPARISON — ALL AGENTS")
+    print("=" * 80)
+
+    print(f"\n{'Agent':<40s}  {'Params':>7s}  {'ValCR':>10s}  {'Time':>8s}")
+    print("─" * 80)
+    for key, data in all_results.items():
+        name = data.get("system", key)
+        params = data.get("param_count", "?")
+        cr = data.get("final_validation_cr", "N/A")
+        elapsed = data.get("elapsed_time", 0)
+        cr_str = f"{cr:.4f}" if isinstance(cr, (int, float)) else str(cr)
+        print(f"{name:<40s}  {params:>7}  {cr_str:>10s}  {elapsed:>7.1f}s")
+    print("─" * 80)
+
+    results_path = output_dir / "all_comparison_results.json"
+    with open(results_path, "w") as f:
+        json.dump(all_results, f, indent=2, default=str)
+    print(f"\n  Results saved to {results_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Cross-system comparison: RLSTCcode vs Q-RLSTC Version D"
+        description="Cross-system comparison: RLSTCcode vs Q-RLSTC (all agents)"
     )
     parser.add_argument(
         "--traj-path",
@@ -734,38 +963,54 @@ def main():
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument(
         "--run",
-        choices=["both", "classical", "quantum"],
-        default="both",
-        help="Which system(s) to run",
+        choices=["all", "both", "classical", "quantum", "adam", "spsa_classical"],
+        default="all",
+        help="Which system(s) to run: all, both (classical+quantum), or individual",
     )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    classical_results = None
-    quantum_results = None
+    all_results = {}
+    run_set = args.run
 
-    if args.run in ("both", "classical"):
-        classical_results = run_classical_experiment(
+    # Classical (OriginalClassicalDQN — faithful RLSTCcode)
+    if run_set in ("all", "both", "classical"):
+        all_results["classical"] = run_classical_experiment(
             args.traj_path, args.centers_path, args.amount, output_dir, args.seed
         )
 
-    if args.run in ("both", "quantum"):
-        quantum_results = run_quantum_experiment(
+    # Adam (modern optimizer control)
+    if run_set in ("all", "adam"):
+        all_results["adam"] = run_adam_experiment(
             args.traj_path, args.centers_path, args.amount, output_dir, args.seed
         )
 
-    if classical_results and quantum_results:
-        compare_results(classical_results, quantum_results, output_dir)
-    elif classical_results:
-        with open(output_dir / "classical_results.json", "w") as f:
-            json.dump(classical_results, f, indent=2, default=str)
-        print(f"\nClassical results saved to {output_dir / 'classical_results.json'}")
-    elif quantum_results:
-        with open(output_dir / "quantum_results.json", "w") as f:
-            json.dump(quantum_results, f, indent=2, default=str)
-        print(f"\nQuantum results saved to {output_dir / 'quantum_results.json'}")
+    # SPSA Classical (same optimizer as quantum)
+    if run_set in ("all", "spsa_classical"):
+        all_results["spsa_classical"] = run_spsa_classical_experiment(
+            args.traj_path, args.centers_path, args.amount, output_dir, args.seed
+        )
+
+    # Quantum VQ-DQN
+    if run_set in ("all", "both", "quantum"):
+        all_results["quantum"] = run_quantum_experiment(
+            args.traj_path, args.centers_path, args.amount, output_dir, args.seed
+        )
+
+    # Comparison
+    if len(all_results) >= 2:
+        compare_all_results(all_results, output_dir)
+    elif len(all_results) == 1:
+        key = list(all_results.keys())[0]
+        path = output_dir / f"{key}_results.json"
+        with open(path, "w") as f:
+            json.dump(all_results[key], f, indent=2, default=str)
+        print(f"\nResults saved to {path}")
+    # Backward compat: also run old compare_results if both classical + quantum
+    if "classical" in all_results and "quantum" in all_results:
+        compare_results(all_results["classical"], all_results["quantum"], output_dir)
 
 
 if __name__ == "__main__":

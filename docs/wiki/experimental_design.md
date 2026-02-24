@@ -1,6 +1,5 @@
 # Experimental Design
 
-[← Back to README](../../README.md) · [Noise & Hardware](noise_and_hardware.md) · **Experimental Design** · [Debugging →](debugging.md)
 
 ---
 

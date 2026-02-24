@@ -74,8 +74,7 @@ q_rlstc/
 │   ├── debugging.md            # Debugging guide
 │   ├── visualization_and_plotting.md  # Plot generation
 │   ├── compute_backends.md     # Backend configuration
-│   ├── roadmap_v2.md           # Historical roadmap
-│   └── roadmap_v4.md           # Current roadmap
+│   ├── roadmap.md              # Future work & research directions
 ├── tests/                      # Unit tests
 │   ├── test_angle_encoding.py
 │   ├── test_hea_depth.py

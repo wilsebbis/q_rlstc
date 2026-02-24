@@ -1,0 +1,95 @@
+site_name: Q-RLSTC Documentation
+site_description: >-
+  Quantum-Enhanced Reinforcement Learning for Sub-Trajectory Clustering
+  using Variational Quantum Deep Q-Networks
+site_author: William Sebbis
+repo_url: https://github.com/wilsebbis/q_rlstc
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.arithmatex:
+      generic: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Architecture:
+    - System Architecture: wiki/architecture.md
+    - Project Structure: wiki/project_structure.md
+  - Data Layer:
+    - Data Layer Overview: wiki/data_layer.md
+    - Distance & Clustering: wiki/distance_and_clustering.md
+    - MDP & Rewards: wiki/mdp_and_rewards.md
+  - Agents:
+    - RL Agents: wiki/rl_agents.md
+    - Quantum Circuit: wiki/quantum_circuit.md
+    - Compute Backends: wiki/compute_backends.md
+  - Training:
+    - Training Pipeline: wiki/training_pipeline.md
+    - Experimental Design: wiki/experimental_design.md
+    - Benchmarking: wiki/benchmarking.md
+  - Results:
+    - Comparison: wiki/comparison.md
+    - Visualization & Plotting: wiki/visualization_and_plotting.md
+    - Noise & Hardware: wiki/noise_and_hardware.md
+  - Reference:
+    - API Reference: wiki/api_reference.md
+    - Technical Deep Dive: wiki/technical_deep_dive.md
+    - Design Justifications: wiki/justifications.md
+    - Debugging Guide: wiki/debugging.md
+  - Planning:
+    - Roadmap: wiki/roadmap.md
+    - Thesis Outline: wiki/ThesisOutline.md

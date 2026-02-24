@@ -1,6 +1,5 @@
 # Debugging Guide
 
-[← Back to README](../../README.md) · [Experimental Design](experimental_design.md) · **Debugging** · [API Reference →](api_reference.md)
 
 ---
 

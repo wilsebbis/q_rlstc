@@ -1,6 +1,5 @@
 # MDP & Reward Engineering
 
-[← Back to README](../../README.md) · [Architecture](architecture.md) · **MDP & Rewards** · [Circuit Design →](quantum_circuit.md)
 
 ---
 
