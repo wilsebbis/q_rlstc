@@ -1,19 +1,4 @@
-"""
-Visualization module for Q-RLSTC trajectory clustering.
-
-Provides plotting utilities for:
-- Learning curves (reward + loss)
-- OD convergence tracking
-- Metric comparison bar charts
-- Noise impact analysis
-- Timing breakdowns
-- Circuit summary tables
-- Cluster assignment scatter plots
-- Segmentation boundary timelines
-- Backend performance comparison
-
-And a BenchmarkRunner for reproducible, tiered experiments.
-"""
+"""Visualization module for Q-RLSTC trajectory clustering."""
 
 from .plot_utils import (
     plot_learning_curves,
@@ -30,11 +15,6 @@ from .plot_utils import (
     STYLE_CONFIG,
 )
 
-from .benchmark import (
-    BenchmarkRunner,
-    BenchmarkResults,
-)
-
 __all__ = [
     "plot_learning_curves",
     "plot_od_convergence",
@@ -48,6 +28,4 @@ __all__ = [
     "plot_backend_comparison",
     "save_results_json",
     "STYLE_CONFIG",
-    "BenchmarkRunner",
-    "BenchmarkResults",
 ]

@@ -8,46 +8,21 @@
 
 The segmentation problem is modelled as a Markov Decision Process. At each point along a trajectory, the agent observes a state and decides to **extend** the current segment or **cut** to start a new one.
 
-## State Space
+**Implementation:** [`rlstc_mdp.py → TrajRLclus`](../../q_rlstc/data/rlstc_mdp.py)
 
-### Version A — 5 Dimensions
+## State Space (5D)
 
-Defined in [`features.py → StateFeatureExtractor`](../../q_rlstc/data/features.py):
+Computed directly in `TrajRLclus.reset()` and `TrajRLclus.step()`:
 
-| # | Feature | Description | Normalisation |
-|---|---------|-------------|---------------|
-| 0 | `od_segment` | Projected OD if we split here | `arctan` |
-| 1 | `od_continue` | Projected OD if we extend | `arctan` |
-| 2 | `baseline_cost` | TRACLUS-like MDL compression score | `arctan` |
-| 3 | `len_backward` | Current segment length / total length | [0, 1] |
-| 4 | `len_forward` | Remaining trajectory / total length | [0, 1] |
+| # | Feature | Description | Range |
+|---|---------|-------------|-------|
+| 0 | `overall_sim` | Global overdistance (trajectory-to-nearest-center IED) | [0, ∞) |
+| 1 | `split_overdist` | Running average OD incorporating current segment | [0, ∞) |
+| 2 | `overall_sim × 10` | Scaled OD (omitted when `ablate_odb=True` → 4D state) | [0, ∞) |
+| 3 | `len_backward` | Current segment length / total trajectory length | [0, 1] |
+| 4 | `len_forward` | Remaining trajectory / total trajectory length | [0, 1] |
 
-### Version B — 8 Dimensions
-
-Inherits all Version A features plus three quantum-native additions in [`features.py → StateFeatureExtractorB`](../../q_rlstc/data/features.py):
-
-| # | Feature | Description | Why added |
-|---|---------|-------------|-----------|
-| 5 | `angle_spread` | Variance of arctan-encoded features | Captures Bloch sphere spread |
-| 6 | `curvature_gradient` | Rate of change of segment curvature | 2nd-order geometric signal; tanh-compressed |
-| 7 | `segment_density` | Points per unit spatial distance | Congestion vs. free-flow without explicit speed |
-
-### Feature Computation Details
-
-**OD Proxies (Features 0-1):**
-
-```python
-def _compute_od_proxy(segment_points, current_od, n_segments):
-    """Lightweight proxy for OD — no full k-means."""
-    coords = np.array([[p.x, p.y] for p in segment_points])
-    centroid = coords.mean(axis=0)
-    segment_cost = np.linalg.norm(coords - centroid, axis=1).mean()
-    return (current_od * n_segments + segment_cost) / (n_segments + 1)
-```
-
-**TRACLUS Baseline (Feature 2):**
-
-Sum of perpendicular distances from interior points to the start-end line, plus a compression cost term (`log₂(line_length)`). Higher values indicate the segment deviates from a straight line — a signal that a segmentation boundary may be appropriate.
+> **Note:** When `ablate_odb=True`, feature 2 is dropped and the state is 4D. This is tested in the ablation experiments.
 
 ## Action Space
 
@@ -58,66 +33,70 @@ Sum of perpendicular distances from interior points to the start-end line, plus 
 
 ## Anti-Gaming Constraints
 
-Defined as constants in `MDPEnvironment`:
+Defined as parameters in `TrajRLclus.__init__()`:
 
 ```python
-MIN_SEGMENT_LEN = 3    # CUT disallowed if segment < 3 points
-MAX_SEGMENTS    = 50   # Episode terminates if exceeded
-SEGMENT_PENALTY = 0.1  # λ: per-segment penalty in reward
+min_seg_len = 3  # CUT disallowed if segment < L_MIN points
 ```
 
-**Enforcement:** If `action == CUT` but `current_segment_len < MIN_SEGMENT_LEN`, the action is forced to EXTEND. This prevents degenerate policies that cut at every step.
+**Enforcement:** If `action == CUT` but the current segment has fewer than `min_seg_len` points, or the remaining trajectory is shorter than `min_seg_len`, the action is silently forced to EXTEND. This prevents degenerate micro-segmentation policies.
+
+```python
+# From rlstc_mdp.py step():
+if action == 1:
+    seg_len = index - self._seg_start_idx + 1
+    remaining = self.length - index
+    if seg_len < self.min_seg_len or remaining < self.min_seg_len:
+        action = 0  # force EXTEND
+```
 
 ## Reward Function
 
-### Why Not Raw OD?
+The reward is computed in the experiment runner (`run_thesis_experiments.py`), not inside the MDP itself. The MDP `step()` returns `reward=0`; the outer training loop applies reward shaping.
 
-The naive reward `reward = old_od - new_od` has three problems:
-
-1. **Delayed signal** — OD only changes meaningfully on CUT
-2. **Sparse rewards** — EXTEND actions receive near-zero reward
-3. **Not Markov-safe** — Depends on global clustering state
-
-### Current Design
-
-The reward combines three components:
-
-```
-reward = α · od_improvement + β · boundary_sharpness − segment_penalty
-```
-
-| Component | Range | When Applied | Purpose |
-|---|---|---|---|
-| `od_improvement` | [0, ∞) | Every step | Local clustering quality signal |
-| `boundary_sharpness × β` | [0, 0.5] | CUT only | Reward cuts at genuine behaviour transitions |
-| `−SEGMENT_PENALTY` | -0.1 | CUT only | Penalise over-segmentation |
-
-### Boundary Sharpness
-
-Measures direction change at the proposed cut point — sharper turns indicate better boundaries:
+### Current Design (PROTOCOL constants)
 
 ```python
-def _compute_boundary_sharpness(boundary_idx):
-    v1 = points[boundary_idx] - points[boundary_idx - 1]     # Before
-    v2 = points[boundary_idx + 1] - points[boundary_idx]     # After
-    cos_angle = dot(v1, v2) / (norm(v1) * norm(v2))
-    angle = arccos(clip(cos_angle, -1, 1))                   # [0, π]
-    return angle / π                                          # [0, 1]
+# From run_thesis_experiments.py PROTOCOL dict:
+EXTEND_COST     = 0.01    # Small cost to discourage idle extending
+CUT_PENALTY     = 0.12    # Per-cut penalty to discourage over-segmentation
+COMPLEXITY_LAMBDA = 0.02  # Complexity regularizer weight
+scale_reward    = 100.0   # Amplification factor for OD improvement signal
 ```
 
-### Variance Delta
+The reward at each step:
 
-Provides per-step feedback for EXTEND actions:
+```
+if action == CUT:
+    raw_reward = scale_reward × (old_overdist − new_overdist) − CUT_PENALTY
+else:  # EXTEND
+    raw_reward = scale_reward × (old_overdist − new_overdist) − EXTEND_COST
+```
+
+### Why Externalised Rewards?
+
+1. **Flexibility** — Different experiments can use different reward shaping without modifying the MDP
+2. **Clean separation** — The MDP handles environment dynamics; the runner handles learning signals
+3. **Transparency** — All reward constants are visible in one PROTOCOL dict
+
+## Q-Value Stability
+
+Both the VQ-DQN and classical agents apply **output clamping** and **TD target clamping** to prevent value explosion:
 
 ```python
-variance_delta = old_variance - new_variance  # Positive if variance decreased
-reward += variance_delta * 0.1
+# Output clamping (in agent._forward / agent.get_q_values):
+q_values = np.clip(q_values, -10.0, 10.0)
+
+# TD target clamping (in agent.compute_targets_batch):
+targets = np.clip(targets, -10.0, 10.0)
 ```
+
+This was introduced after observing Q-value explosion to ~78M in early experiments. The ±10 bounds are empirically sufficient given the reward scale.
 
 ## Termination
 
-1. **End of trajectory** — All points consumed
-2. **Max segments exceeded** — `n_segments ≥ MAX_SEGMENTS`
+1. **End of trajectory** — All points consumed (`index + 1 == self.length`)
+2. The final segment is automatically closed and assigned to a cluster
 
 ---
 

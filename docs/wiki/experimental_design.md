@@ -12,124 +12,113 @@ If the quantum and classical implementations differ in anything beyond the funct
 
 | Component | Classical Control | Quantum Experiment | Same? |
 |---|---|---|---|
-| Feature extraction | StateFeatureExtractor | StateFeatureExtractor | ✅ |
-| State representation | 5D vector | 5D vector | ✅ |
+| State representation | 5D vector (from `rlstc_mdp.py`) | 5D vector | ✅ |
 | Action space | {extend, cut} | {extend, cut} | ✅ |
-| Reward function | OD + boundary sharpness | OD + boundary sharpness | ✅ |
-| Replay buffer | Size 5000, uniform | Size 5000, uniform | ✅ |
+| Reward function | OD delta + CUT\_PENALTY + EXTEND\_COST | Same | ✅ |
+| Replay buffer | Size 5,000, uniform | Size 5,000, uniform | ✅ |
 | Exploration | ε-greedy, same schedule | ε-greedy, same schedule | ✅ |
 | Target network | Double DQN, same freq | Double DQN, same freq | ✅ |
-| **Function approximator** | **MLP (5→H→2)** | **VQ-DQN (5q, 2 layers)** | ❌ Variable |
+| **Function approximator** | **MLP (various sizes)** | **VQ-DQN (5q, 3L HEA)** | ❌ Variable |
 | Optimizer | SPSA (same hyperparams) | SPSA (same hyperparams) | ✅ |
 | Loss | Huber (δ=1.0) | Huber (δ=1.0) | ✅ |
-| Dataset | Same seed | Same seed | ✅ |
-| Distance metric | IED (trajdistance.py) | IED (trajdistance.py) | ✅ |
-| Preprocessing | MDL simplification | MDL simplification | ✅ |
+| Dataset | Same seed, same split | Same seed, same split | ✅ |
+| Distance metric | IED (rlstc\_trajdistance.py) | IED | ✅ |
+| Q-value clamping | ±10.0 | ±10.0 | ✅ |
+| TD target clamping | ±10.0 | ±10.0 | ✅ |
+| L\_MIN constraint | 3 | 3 | ✅ |
 
 ### Common Pitfalls
 
 | Pitfall | Why It Breaks Comparability |
 |---|---|
-| Adam for classical, SPSA for quantum | Optimizer effects dominate approximator effects |
+| Different optimizers (Adam vs SPSA) | Optimizer effects dominate approximator effects |
 | Different batch sizes | Affects gradient variance independently |
-| Different learning rate schedules | Convergence changes are optimizer artifacts |
 | Different shot counts | Added noise is an uncontrolled variable |
 | Different random seeds | Trajectory order and exploration path differ |
 | Quantum with noise, classical without | Measuring noise tolerance, not approximation quality |
-| Different distance metrics | IED vs. OD proxy produces different reward signals |
 
 ## Classical Baselines
 
 | Control | Architecture | Params | Purpose |
 |---|---|---|---|
-| **A: Parameter-matched** | 5→4→2 MLP | 30 | Quantum gains from structure or just right param count? |
-| **B: Architecture-matched** | 5→64→2 MLP | ~450 | Classical ceiling — how well can unconstrained classical do? |
-| **C: Linear** | 5→2 | 12 | Is the problem trivially linear? |
-| **D: RLSTCcode direct** | 5→64→2 MLP (TF/Keras) | ~450 | Original paper implementation for ground truth |
+| **A: Linear** | 5→2 (no hidden layers) | 12 | Is the problem trivially linear? |
+| **B: Medium MLP** | 5→64→2 | 514 | Moderate capacity baseline |
+| **C: Deep MLP** | 5→32→32→2 | 1,314 | High capacity — classical ceiling |
 
-**Critical:** Controls A–C use SPSA (not SGD/Adam with backprop). Control D uses original SGD.
+**Critical:** All controls use SPSA (not SGD/Adam), identical to the quantum agent. This isolates the function approximator as the only variable.
 
 ## Primary Metrics
 
 | Metric | Measures | Report As |
 |---|---|---|
-| **Overall Distance (OD)** | Clustering quality at convergence | Mean ± std over 5 seeds |
-| **Segmentation F1** | Boundary detection accuracy | Against ground truth |
-| **Convergence rate** | Episodes to reach 90% of final OD | Lower = more sample-efficient |
-| **Parameter count** | Model complexity | Quantum advantage claim |
+| **ValCR** (raw) | Mean segment-to-center IED / base similarity | Table + Pareto |
+| **nValCR** (per-point) | Mean of (IED/segment\_length) / base similarity | D1 diagnostic |
+| **wValCR** (length-weighted) | Total\_IED / total\_points / base similarity | D1 diagnostic |
+| **CUT%** | Fraction of actions that are CUT | Per-epoch |
+| **#Segments** | Total segments produced | Per-epoch |
+| **Q-margin** | Q(extend) − Q(cut) | D2 diagnostic |
+| **Parameter count** | Total trainable parameters | One-time |
 
-## Quantum-Specific Metrics
+### Metric Pathology Awareness
 
-| Metric | What It Reveals |
-|---|---|
-| **Noise resilience ratio** | `OD_noisy / OD_ideal` — noise degradation |
-| **Parameter efficiency** | `OD_quantum(20p) / OD_classical(20p)` |
-| **Circuit fidelity** | Validates depth choice |
-| **Shot sensitivity** | OD vs. shots — noise floor |
-| **Gradient variance** | SPSA gradient norm variance |
+Raw ValCR is **structurally degenerate**: IED grows with segment length, so cutting always lowers the metric. This is diagnosed by D1 and mitigated via budget-constrained reporting (Pareto table).
 
-## Experimental Matrix
+## Experiment Matrix
 
-### Project-Level (Minimum)
+### Diagnostic Experiments (D1–D5)
 
-| Experiment | Variable | Fixed | Measures |
+| ID | Name | Variable | Measures |
 |---|---|---|---|
-| **E1** | VQ-DQN vs. MLP(30) vs. MLP(450) vs. Linear | All else, SPSA | Core quantum utility |
-| **E2** | Ideal vs. Eagle vs. Heron | VQ-DQN | NISQ viability |
-| **E3** | 128, 256, 512, 1024, 4096 shots | VQ-DQN ideal | Noise floor |
-| **E4** | 1, 2, 3 variational layers | Same qubit count | Expressivity vs. noise |
-| **E5** | 2, 4, 8, 16 true boundaries | All systems | Dataset scaling |
-| **E6** | Version A vs. B vs. C vs. D | Ideal backend | Version comparison |
-| **E7** | Q-RLSTC (D) vs. RLSTCcode classical | Same T-Drive data | Classical parity validation |
+| **D1** | ValCR vs CUT% | Random CUT probability (0%–100%) | Metric degeneracy; reports raw, nValCR, wValCR |
+| **D2** | Q-margin | Per-epoch Q(ext)−Q(cut) | Policy bias formation |
+| **D3** | Training action dist | Per-epoch CUT% in training | Action distribution drift |
+| **D4** | Policy basin test | Forced all-cut / all-extend / alternating | Basin structure |
+| **D5** | Buffer histogram | Buffer CUT% vs on-policy CUT% | Replay distribution drift |
 
-### Version-Specific Experiments
+### Core Benchmarks (E1–E6)
 
-| Experiment | Version | Variable | Measures |
+| ID | Name | Variable | Measures |
 |---|---|---|---|
-| **V1** | A vs. D | State features (Q-RLSTC proxy vs. VLDB exact) | Feature design impact |
-| **V2** | B | 5 vs. 8 qubits, standard vs. multi-observable readout | Hilbert space utilisation |
-| **V3** | C | EQC vs. HEA ansatz, SAC vs. ε-greedy | Quantum-native architecture gains |
-| **V4** | C | DROP action enabled vs. disabled | Noise filtering benefit |
-| **V5** | D | SKIP action enabled vs. disabled | Efficiency of fast-forward |
-| **V6** | C | Adaptive (32→512) vs. fixed (512) shots | Shot efficiency |
-| **V7** | C | SPSA vs. m-SPSA | Momentum benefit under shot noise |
+| **E1** | Core Quantum Utility | VQ-DQN vs Controls A/B/C | Parameter efficiency |
+| **E2** | NISQ Viability | Eagle / Heron noise models | Noise degradation |
+| **E3** | Shot Sensitivity | 128 / 512 / 2048 shots | Sampling noise floor |
+| **E4** | Drift Resilience | Temporal distribution shift | Robustness |
+| **E5** | Low-Data | 10% / 25% / 50% data fractions | Sample efficiency |
+| **E6** | Version Progression | Circuit architecture variants | Design ablation |
 
-### Cross-System Comparison (via `run_cross_comparison.py`)
+### Scalability (S1)
 
-| Experiment | Classical Arm | Quantum Arm | Data | Measures |
-|---|---|---|---|---|
-| **X1** | RLSTCcode (5→64→2, SGD) | Q-RLSTC Version D (5q HEA, SPSA) | T-Drive 500 | OD parity |
-| **X2** | RLSTCcode (same) | Q-RLSTC Version A (5q HEA, SPSA) | T-Drive 500 | Feature design gap |
-| **X3** | MLP(30, SPSA) | Q-RLSTC Version A (5q, SPSA) | Synthetic | Pure approximator comparison |
+| ID | Name | Variable | Measures |
+|---|---|---|---|
+| **S1** | Inference timing | 250–1000 trajectories | Wall-clock overhead |
 
-### Thesis-Level (Additional)
+### Multi-Seed Protocol
 
-| Experiment | Variable | Measures |
-|---|---|---|
-| **E8** | Angle vs. ZZFeatureMap vs. amplitude | Best encoding for RL state |
-| **E9** | Linear vs. ring vs. full entanglement | Connectivity vs. noise |
-| **E10** | SPSA vs. parameter-shift | Gradient estimation quality |
-| **E11** | Pre-train ideal, fine-tune noisy | Noise adaptation |
+All E-series experiments support `--seeds` for multi-seed runs:
+
+```bash
+python experiments/run_thesis_experiments.py --experiments E1 --amount 50 --epochs 3 \
+    --seeds 42,123,7,99,2025
+```
+
+Reports mean ± std across seeds for ValCR, CUT%, Q-margin, and #segments.
 
 ## Analysis Plan
 
-### Boundary Sharpness Analysis
+### Pareto Frontier Analysis
+- Plot: agents overlaid on D1 random baseline curve (ValCR vs CUT%)
+- Table: best ValCR at CUT ≤ {5%, 10%, 20%, 30%, 40%, 50%}
+- Purpose: eliminates degenerate solutions from headline results
 
-1. **Distribution comparison** — Histogram of sharpness at predicted vs. true boundaries (quantum vs. classical)
-2. **Decision boundary** — Plot `Q(cut) − Q(extend)` vs. boundary sharpness
-3. **False positive analysis** — Are low-sharpness cuts from noise (quantum) or overfitting (classical)?
+### Q-Learning Dynamics
+- Q-value evolution pre/post clamping
+- Q-margin trends across epochs (VQ-DQN vs classical)
+- Replay buffer drift quantification
 
-### Clustering Quality by Complexity
-
-Segment trajectories by number of true boundaries (2, 4, 8, 16) and measure OD for each. Does quantum degrade faster on complex trajectories?
-
-### Cluster Assignment Stability
-
-Across 5 seeds: how consistent are cluster assignments? Higher variance in quantum → noise dominates.
-
-### Version Progression Analysis
-
-Run E6 and plot: OD vs. version (A→B→C→D). Does architectural sophistication improve results, or does simplicity win?
+### NISQ Sensitivity
+- ValCR vs shot count curves
+- Noise model degradation (Eagle, Heron)
+- Training stability under finite sampling
 
 ---
 

@@ -3,9 +3,6 @@
 Contains:
 - VQ-DQN circuit builder with angle encoding
 - Backend factory for Aer simulators
-- Readout error mitigation
-
-Note: Swap test was removed. All distance computation is classical.
 """
 
 from .vqdqn_circuit import (
@@ -18,10 +15,6 @@ from .backends import (
     get_backend,
     BackendFactory,
 )
-from .mitigation import (
-    ReadoutMitigator,
-    apply_mitigation,
-)
 
 __all__ = [
     "build_vqdqn_circuit",
@@ -30,6 +23,4 @@ __all__ = [
     "VQDQNCircuitBuilder",
     "get_backend",
     "BackendFactory",
-    "ReadoutMitigator",
-    "apply_mitigation",
 ]

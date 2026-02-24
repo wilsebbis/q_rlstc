@@ -120,9 +120,18 @@ class BackendFactory:
     
     @staticmethod
     def get_ibm_eagle_noise_model() -> NoiseModel:
-        """Get noise model approximating IBM Eagle processor.
-        
-        Based on typical IBM Eagle (127 qubit) error rates.
+        """Noise model approximating IBM Eagle r3 processor (127 qubits).
+
+        Channels applied:
+          - Depolarizing (1Q): p=5e-4 on {ry, rz, rx, h, u}
+          - Depolarizing (2Q): p=8e-3 on {cx, cz}
+          - Thermal relaxation: T1=300µs, T2=150µs
+          - Gate times: 1Q=56ns (SX), 2Q=400ns (ECR)
+          - Readout bit-flip: p=1.0%
+
+        Source: Approximate values from IBM Quantum documentation
+        (not calibration-data replay). Represents typical error budget,
+        not a specific device snapshot.
         """
         return BackendFactory.get_thermal_noise_model(
             t1=300e-6,
@@ -136,9 +145,18 @@ class BackendFactory:
     
     @staticmethod
     def get_ibm_heron_noise_model() -> NoiseModel:
-        """Get noise model approximating IBM Heron processor.
-        
-        Based on IBM Heron specifications (lower error rates).
+        """Noise model approximating IBM Heron processor (133 qubits).
+
+        Channels applied:
+          - Depolarizing (1Q): p=2e-4 on {ry, rz, rx, h, u}
+          - Depolarizing (2Q): p=2e-3 on {cx, cz}
+          - Thermal relaxation: T1=400µs, T2=200µs
+          - Gate times: 1Q=40ns, 2Q=100ns (tunable coupler)
+          - Readout bit-flip: p=0.5%
+
+        Source: Approximate values from IBM Heron specifications.
+        Heron's tunable coupler reduces 2Q gate time by ~4× vs Eagle,
+        significantly improving coherence-limited fidelity.
         """
         return BackendFactory.get_thermal_noise_model(
             t1=400e-6,

@@ -16,6 +16,7 @@ from qiskit_aer import AerSimulator
 from ..quantum.vqdqn_circuit import (
     VQDQNCircuitBuilder,
     evaluate_q_values,
+    q_values_batch,
     CircuitInfo,
 )
 from ..quantum.backends import get_backend
@@ -92,24 +93,51 @@ class VQDQNAgent:
         )
         
         # Initialize parameters
-        self.n_params = self.circuit_builder.n_total_params
-        self.params = self.rng.uniform(-np.pi, np.pi, self.n_params)
-        self.target_params = self.params.copy()
+        self.n_circuit_params = self.circuit_builder.n_total_params
+        circuit_params = self.rng.uniform(-np.pi, np.pi, self.n_circuit_params)
         
-        # Output scaling — Version B uses 4 weights (2 single + 2 parity)
-        n_scale = 4 if self.version == "B" else 2
-        self.output_scale = np.ones(n_scale)
-        self.output_bias = np.zeros(2)
+        # Learnable output affine head: Q(s,a) = ⟨Z_a⟩ * scale[a] + bias[a]
+        # Scale=5.0 so Q-range is ~ [-5, 5], matching γ=0.99 TD targets.
+        # Version B uses 4 scale weights (2 single + 2 parity).
+        self._n_scale = 4 if self.version == "B" else 2
+        init_scale = np.full(self._n_scale, 5.0)
+        init_bias = np.zeros(2)
+        
+        # Concatenate [circuit_params | scale | bias] into one SPSA vector
+        self.params = np.concatenate([circuit_params, init_scale, init_bias])
+        self.target_params = self.params.copy()
+        self.n_params = len(self.params)  # circuit + scale + bias
         
         # Exploration
         self.epsilon = self.config.epsilon_start
         
-        # SPSA optimizer
+        # SPSA optimizer (optimizes all params: circuit + head)
         self.optimizer = SPSAOptimizer(seed=seed)
         
         # Statistics
         self.episode_count = 0
         self.training_step = 0
+    
+    # ── helpers to split the flat param vector ──────────────────
+    
+    def _split_params(self, params: np.ndarray):
+        """Split [circuit | scale | bias] parameter vector."""
+        circuit = params[:self.n_circuit_params]
+        scale = params[self.n_circuit_params:self.n_circuit_params + self._n_scale]
+        bias = params[self.n_circuit_params + self._n_scale:]
+        return circuit, scale, bias
+    
+    @property
+    def output_scale(self) -> np.ndarray:
+        """Current learned scale (from online params)."""
+        _, scale, _ = self._split_params(self.params)
+        return scale
+    
+    @property
+    def output_bias(self) -> np.ndarray:
+        """Current learned bias (from online params)."""
+        _, _, bias = self._split_params(self.params)
+        return bias
     
     def get_q_values(
         self,
@@ -125,20 +153,22 @@ class VQDQNAgent:
         Returns:
             Q-values [Q(s, extend), Q(s, cut)].
         """
-        params = self.target_params if use_target else self.params
+        full_params = self.target_params if use_target else self.params
+        circuit_p, scale, bias = self._split_params(full_params)
         
-        return evaluate_q_values(
+        q = evaluate_q_values(
             state=state,
-            params=params,
+            params=circuit_p,
             backend=self.backend,
             shots=self.config.shots,
             n_qubits=self.config.n_qubits,
             n_layers=self.config.n_layers,
             use_data_reuploading=True,
-            output_scale=self.output_scale,
-            output_bias=self.output_bias,
+            output_scale=scale,
+            output_bias=bias,
             readout_mode=self.readout_mode,
         )
+        return np.clip(q, -10.0, 10.0)
     
     def act(self, state: np.ndarray, greedy: bool = False) -> int:
         """Select action using epsilon-greedy policy.
@@ -156,110 +186,118 @@ class VQDQNAgent:
         q_values = self.get_q_values(state)
         return int(np.argmax(q_values))
     
-    def compute_target(
+    def compute_targets_batch(
         self,
-        reward: float,
-        next_state: np.ndarray,
-        done: bool,
-    ) -> float:
-        """Compute TD target for update.
-        
-        Uses Double DQN if configured: uses online network to select
-        best action, target network to evaluate it.
+        rewards: np.ndarray,
+        next_states: np.ndarray,
+        dones: np.ndarray,
+    ) -> np.ndarray:
+        """Compute TD targets for an entire batch. 1-2 batched evals total.
         
         Args:
-            reward: Immediate reward.
-            next_state: Next state.
-            done: Whether episode ended.
+            rewards: (B,) rewards.
+            next_states: (B, state_dim) next states.
+            dones: (B,) done flags.
         
         Returns:
-            TD target value.
+            (B,) TD targets.
         """
-        if done:
-            return reward
+        B = len(rewards)
+        targets = rewards.copy()
+        
+        # Find non-terminal transitions
+        alive = ~dones.astype(bool)
+        if not alive.any():
+            return targets
+        
+        alive_next = next_states[alive]
+        
+        # Split online and target param vectors
+        online_circ, online_scale, online_bias = self._split_params(self.params)
+        target_circ, target_scale, target_bias = self._split_params(self.target_params)
         
         if self.config.use_double_dqn:
-            # Online network selects best action
-            online_q = self.get_q_values(next_state, use_target=False)
-            best_action = int(np.argmax(online_q))
-            
-            # Target network evaluates
-            target_q = self.get_q_values(next_state, use_target=True)
-            next_value = target_q[best_action]
+            # Double DQN: online selects, target evaluates — 2 batch evals
+            q_online = q_values_batch(
+                alive_next, online_circ,
+                self.config.n_qubits, self.config.n_layers,
+                output_scale=online_scale, output_bias=online_bias)
+            q_target = q_values_batch(
+                alive_next, target_circ,
+                self.config.n_qubits, self.config.n_layers,
+                output_scale=target_scale, output_bias=target_bias)
+            best_actions = np.argmax(q_online, axis=1)
+            next_values = q_target[np.arange(len(alive_next)), best_actions]
         else:
-            # Standard DQN
-            target_q = self.get_q_values(next_state, use_target=True)
-            next_value = np.max(target_q)
+            # Standard DQN — 1 batch eval
+            q_target = q_values_batch(
+                alive_next, target_circ,
+                self.config.n_qubits, self.config.n_layers,
+                output_scale=target_scale, output_bias=target_bias)
+            next_values = np.max(q_target, axis=1)
         
-        return reward + self.config.gamma * next_value
+        targets[alive] += self.config.gamma * next_values
+        return np.clip(targets, -10.0, 10.0)
     
-    def _compute_loss(
+    def _batch_loss(
         self,
         params: np.ndarray,
-        state: np.ndarray,
-        action: int,
-        target: float,
+        states: np.ndarray,
+        actions: np.ndarray,
+        targets: np.ndarray,
     ) -> float:
-        """Compute TD loss for SPSA.
+        """Batched Huber loss — ONE q_values_batch call per invocation.
         
-        Args:
-            params: Parameters to evaluate.
-            state: State.
-            action: Action taken.
-            target: TD target.
-        
-        Returns:
-            Squared TD error.
+        SPSA calls this twice (θ+δ, θ-δ) = 2 batch evals total.
+        params is the full [circuit | scale | bias] vector.
         """
-        q_values = evaluate_q_values(
-            state=state,
-            params=params,
-            backend=self.backend,
-            shots=self.config.shots,
-            n_qubits=self.config.n_qubits,
-            n_layers=self.config.n_layers,
-            use_data_reuploading=True,
-            output_scale=self.output_scale,
-            output_bias=self.output_bias,
-            readout_mode=self.readout_mode,
+        circuit_p, scale, bias = self._split_params(params)
+        q_all = q_values_batch(
+            states, circuit_p,
+            self.config.n_qubits, self.config.n_layers,
+            output_scale=scale, output_bias=bias)
+        
+        B = len(states)
+        preds = q_all[np.arange(B), actions.astype(int)]
+        td_errors = targets - preds
+        
+        # Huber loss (vectorized)
+        delta = 1.0
+        abs_err = np.abs(td_errors)
+        loss = np.where(
+            abs_err <= delta,
+            0.5 * td_errors ** 2,
+            delta * (abs_err - 0.5 * delta),
         )
-        
-        q_value = q_values[action]
-        td_error = target - q_value
-        
-        # Huber loss: robust to outliers from quantum bit-flip errors
-        delta = 1.0  # Huber delta parameter
-        if abs(td_error) <= delta:
-            return 0.5 * td_error ** 2
-        else:
-            return delta * (abs(td_error) - 0.5 * delta)
+        return float(loss.mean())
     
     def update(
         self,
         states: np.ndarray,
         actions: np.ndarray,
-        targets: np.ndarray,
+        rewards: np.ndarray,
+        next_states: np.ndarray,
+        dones: np.ndarray,
     ) -> float:
-        """Perform SPSA update on parameters.
+        """Perform batched SPSA update.
         
-        Args:
-            states: Batch of states.
-            actions: Batch of actions.
-            targets: Batch of TD targets.
-        
-        Returns:
-            Average loss.
+        Total circuit evaluations per call:
+        - compute_targets_batch: 1-2 q_values_batch calls (done ONCE)
+        - SPSA step: 2 × _batch_loss = 2 q_values_batch calls
+        Total: 3-4 batch evals instead of ~160 individual evals.
         """
-        def batch_loss(params):
-            total_loss = 0.0
-            for state, action, target in zip(states, actions, targets):
-                total_loss += self._compute_loss(params, state, int(action), target)
-            return total_loss / len(states)
+        # Compute targets ONCE (outside SPSA loop)
+        targets = self.compute_targets_batch(rewards, next_states, dones)
         
-        self.params, _ = self.optimizer.step(batch_loss, self.params)
+        # SPSA loss: only depends on params (targets are fixed)
+        def loss_fn(params):
+            return self._batch_loss(params, states, actions, targets)
+        
+        self.params, _ = self.optimizer.step(loss_fn, self.params)
         self.training_step += 1
         
-        return batch_loss(self.params)
+        # No redundant 3rd loss eval — return 0 as placeholder
+        return 0.0
     
     def update_target_network(self) -> None:
         """Copy online parameters to target network."""
@@ -279,7 +317,8 @@ class VQDQNAgent:
     
     def get_circuit_info(self) -> CircuitInfo:
         """Get information about the VQ-DQN circuit."""
-        return self.circuit_builder.get_circuit_info(self.params)
+        circuit_p, _, _ = self._split_params(self.params)
+        return self.circuit_builder.get_circuit_info(circuit_p)
     
     def save_checkpoint(self, path: str) -> None:
         """Save agent state to file."""
@@ -302,5 +341,5 @@ class VQDQNAgent:
         self.epsilon = float(data['epsilon'])
         self.episode_count = int(data['episode_count'])
         self.training_step = int(data['training_step'])
-        self.output_scale = data['output_scale']
-        self.output_bias = data['output_bias']
+        # output_scale and output_bias are embedded in self.params
+        # (read via @property accessors)

@@ -1,0 +1,94 @@
+{
+  "protocol": {
+    "batch_size": 32,
+    "memory_size": 5000,
+    "gamma": 0.9,
+    "huber_delta": 1.0,
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.1,
+    "epsilon_decay": 0.99,
+    "target_update_freq": 10,
+    "L_MIN": 3,
+    "CUT_PENALTY": 0.12,
+    "EXTEND_COST": 0.01,
+    "COMPLEXITY_LAMBDA": 0.03
+  },
+  "args": {
+    "traj_path": "/Users/wilsebbis/Developer/q_rlstc/q_rlstc/data/Tdrive_norm_traj",
+    "centers_path": "/Users/wilsebbis/Developer/q_rlstc/q_rlstc/data/tdrive_clustercenter",
+    "amount": 30,
+    "epochs": 1,
+    "seed": 42,
+    "output_dir": "results/thesis",
+    "experiments": "D1",
+    "plots_only": null
+  },
+  "env": {
+    "timestamp": "2026-02-24T01:18:37.493701",
+    "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+    "numpy": "2.4.1",
+    "git_hash": "4eb14ed84e33f2e55174d4696a572d28961a403e",
+    "qiskit": "2.3.0"
+  },
+  "D1": {
+    "experiment": "D1",
+    "results": [
+      {
+        "cut_prob": 0.0,
+        "actual_cut_pct": 0.0,
+        "val_cr": 9.205147834537682,
+        "total_segs": 3,
+        "avg_seg_len": 465.3333333333333
+      },
+      {
+        "cut_prob": 0.05,
+        "actual_cut_pct": 4.594400574300072,
+        "val_cr": 1.5032056750521423,
+        "total_segs": 67,
+        "avg_seg_len": 21.791044776119403
+      },
+      {
+        "cut_prob": 0.1,
+        "actual_cut_pct": 8.327351040918881,
+        "val_cr": 1.507170078555994,
+        "total_segs": 119,
+        "avg_seg_len": 12.705882352941176
+      },
+      {
+        "cut_prob": 0.2,
+        "actual_cut_pct": 14.931801866475233,
+        "val_cr": 1.4869387464977486,
+        "total_segs": 211,
+        "avg_seg_len": 7.601895734597156
+      },
+      {
+        "cut_prob": 0.3,
+        "actual_cut_pct": 21.105527638190956,
+        "val_cr": 1.461054656550517,
+        "total_segs": 297,
+        "avg_seg_len": 5.69023569023569
+      },
+      {
+        "cut_prob": 0.5,
+        "actual_cut_pct": 32.30437903804738,
+        "val_cr": 1.431133425715584,
+        "total_segs": 453,
+        "avg_seg_len": 4.075055187637969
+      },
+      {
+        "cut_prob": 0.8,
+        "actual_cut_pct": 43.431442928930366,
+        "val_cr": 1.4191899288633598,
+        "total_segs": 608,
+        "avg_seg_len": 3.2911184210526314
+      },
+      {
+        "cut_prob": 1.0,
+        "actual_cut_pct": 49.74874371859296,
+        "val_cr": 1.4193339964600404,
+        "total_segs": 696,
+        "avg_seg_len": 3.0014367816091956
+      }
+    ]
+  }
+}

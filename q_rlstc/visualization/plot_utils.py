@@ -8,6 +8,7 @@ QRLSTC/plot_utils.py.
 All plots are 150 DPI, bbox_inches='tight', with consistent style.
 """
 
+import gc
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -19,9 +20,16 @@ try:
     matplotlib.use("Agg")  # non-interactive backend
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gridspec
+    from matplotlib.patches import Patch
     MPL_AVAILABLE = True
 except ImportError:
     MPL_AVAILABLE = False
+
+try:
+    import folium
+    FOLIUM_AVAILABLE = True
+except ImportError:
+    FOLIUM_AVAILABLE = False
 
 
 # ── Publication-quality style config ──────────────────────────────────
@@ -72,7 +80,7 @@ def _smooth(values: List[float], window: int = 10) -> np.ndarray:
     return np.convolve(arr, kernel, mode="valid")
 
 
-def _add_info_box(ax: plt.Axes, text: str, loc: str = "upper right"):
+def _add_info_box(ax: "plt.Axes", text: str, loc: str = "upper right"):
     """Add a semi-transparent info box to the axes."""
     props = dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.85,
                  edgecolor="#cccccc")
@@ -643,8 +651,6 @@ def plot_backend_comparison(
 
     backend_colors = {
         "cpu": "#aaaaaa",
-        "mlx": "#4363d8",
-        "cuda": "#3cb44b",
     }
 
     x = np.arange(n_runs)
@@ -679,3 +685,679 @@ def plot_backend_comparison(
     fig.savefig(str(out_path), dpi=150, bbox_inches="tight")
     plt.close(fig)
 
+
+# ─────────────────────────────────────────────────────────────────────
+# Thesis-Specific Plots
+# ─────────────────────────────────────────────────────────────────────
+
+def plot_pareto_frontier(
+    results: List[Dict[str, Any]],
+    out_path: Union[str, Path] = "pareto_frontier.png",
+    title: str = "Efficiency Frontier: ValCR vs CUT%",
+):
+    """Scatter plot of ValCR vs CUT% with marker size proportional to param count.
+
+    Highlights the trade-off between clustering quality and segmentation
+    aggressiveness. Quantum models should cluster toward low-CUT, low-ValCR.
+
+    Args:
+        results: List of benchmark result dicts with keys:
+            model, val_cr, cut_pct, params.
+        out_path: Output file path.
+        title: Plot title.
+    """
+    _require_mpl()
+    _apply_style()
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    for r in results:
+        is_quantum = "VQ-DQN" in r.get("model", "")
+        color = COLORS["version_a"] if is_quantum else COLORS["classical"]
+        marker = "D" if is_quantum else "o"
+        size = max(20, r.get("params", 30) * 1.5)
+
+        ax.scatter(
+            r["cut_pct"], r["val_cr"],
+            s=size, c=color, marker=marker, alpha=0.8,
+            edgecolors="white", linewidths=0.8, zorder=5,
+        )
+        ax.annotate(
+            r["model"], (r["cut_pct"], r["val_cr"]),
+            textcoords="offset points", xytext=(8, 4),
+            fontsize=7, alpha=0.85,
+        )
+
+    ax.set_xlabel("CUT% (segmentation aggressiveness)")
+    ax.set_ylabel("ValCR (lower is better)")
+    ax.set_title(title)
+
+    # Legend for marker types
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker="D", color="w", markerfacecolor=COLORS["version_a"],
+               markersize=8, label="Quantum (VQ-DQN)"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor=COLORS["classical"],
+               markersize=8, label="Classical (SPSA MLP)"),
+    ]
+    ax.legend(handles=legend_elements, loc="upper right")
+    _add_info_box(ax, "Marker size ∝ parameter count", loc="lower right")
+
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_shot_sensitivity(
+    shot_counts: List[int],
+    val_crs: List[float],
+    noise_ratios: Optional[List[float]] = None,
+    out_path: Union[str, Path] = "shot_sensitivity.png",
+    title: str = "E3: Shot Count Sensitivity",
+):
+    """Line chart of shots vs ValCR and optional NR for E3 analysis.
+
+    Args:
+        shot_counts: List of shot budgets (e.g. [128, 256, 512, 1024, 4096]).
+        val_crs: ValCR at each shot count.
+        noise_ratios: Optional NR values at each shot count.
+        out_path: Output file path.
+        title: Plot title.
+    """
+    _require_mpl()
+    _apply_style()
+
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+
+    ax1.plot(shot_counts, val_crs, "o-", color=COLORS["version_a"],
+             linewidth=2, markersize=8, label="ValCR")
+    ax1.set_xlabel("Shots per circuit evaluation")
+    ax1.set_ylabel("ValCR (lower is better)", color=COLORS["version_a"])
+    ax1.set_xscale("log", base=2)
+    ax1.tick_params(axis="y", labelcolor=COLORS["version_a"])
+
+    if noise_ratios is not None:
+        ax2 = ax1.twinx()
+        ax2.plot(shot_counts, noise_ratios, "s--", color=COLORS["eagle"],
+                 linewidth=2, markersize=8, label="Noise Ratio")
+        ax2.set_ylabel("Noise Ratio (NR)", color=COLORS["eagle"])
+        ax2.tick_params(axis="y", labelcolor=COLORS["eagle"])
+        ax2.axhline(y=1.0, color="grey", linestyle=":", alpha=0.5)
+        ax2.legend(loc="upper right")
+
+    ax1.legend(loc="upper left")
+    ax1.set_title(title)
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_q_value_evolution(
+    q_values_per_epoch: List[Tuple[float, float]],
+    out_path: Union[str, Path] = "q_value_evolution.png",
+    title: str = "Q-Value Evolution (Stuckness Diagnostic)",
+):
+    """Per-epoch Q-value evolution for a fixed probe state.
+
+    If Q-values don't change across epochs, the model's policy is stuck.
+
+    Args:
+        q_values_per_epoch: List of (Q_extend, Q_cut) tuples per epoch.
+        out_path: Output file path.
+        title: Plot title.
+    """
+    _require_mpl()
+    _apply_style()
+
+    epochs = list(range(1, len(q_values_per_epoch) + 1))
+    q_ext = [q[0] for q in q_values_per_epoch]
+    q_cut = [q[1] for q in q_values_per_epoch]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(epochs, q_ext, "o-", color=COLORS["version_a"],
+            label="Q(EXTEND)", linewidth=2, markersize=8)
+    ax.plot(epochs, q_cut, "s-", color=COLORS["version_b"],
+            label="Q(CUT)", linewidth=2, markersize=8)
+
+    # Shade "stuck" region if Q-values barely change
+    q_ext_range = max(q_ext) - min(q_ext) if q_ext else 0
+    q_cut_range = max(q_cut) - min(q_cut) if q_cut else 0
+    if max(q_ext_range, q_cut_range) < 0.01:
+        ax.axhspan(min(q_ext + q_cut) - 0.1, max(q_ext + q_cut) + 0.1,
+                   alpha=0.15, color="red")
+        _add_info_box(ax, "⚠ Q-values stuck\n(policy not updating)")
+    else:
+        delta = abs(q_cut[-1] - q_ext[-1])
+        _add_info_box(ax, f"ΔQ(final) = {delta:.4f}\nQ evolving ✓")
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Q-Value (fixed probe state)")
+    ax.legend()
+    ax.set_title(title)
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Trajectory Cluster Plots (ported from QRLSTC/plot_utils.py &
+#   TheFinalQRLSTC/subtrajcluster/visualization/plot_utils.py)
+# ─────────────────────────────────────────────────────────────────────
+
+def _get_distinct_colors(n: int) -> List[Tuple[float, ...]]:
+    """Generate *n* maximally distinct colours."""
+    PALETTE = [
+        '#e6194B', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
+        '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990',
+        '#dcbeff', '#9A6324', '#fffac8', '#800000', '#aaffc3',
+        '#808000', '#ffd8b1', '#000075', '#a9a9a9', '#000000',
+    ]
+    if n <= len(PALETTE):
+        import matplotlib.colors as mcolors
+        return [mcolors.to_rgb(c) for c in PALETTE[:n]]
+    import colorsys
+    colors = []
+    golden = 0.618033988749895
+    h = 0.0
+    for _ in range(n):
+        colors.append(colorsys.hsv_to_rgb(h, 0.85, 0.9))
+        h = (h + golden) % 1.0
+    return colors
+
+
+def plot_trajectory_clusters(
+    cluster_dict: Dict[int, Any],
+    out_path: Union[str, Path],
+    alpha: float = 0.4,
+    center_alpha: float = 0.9,
+    point_sample_rate: int = 10,
+    trajectory_sample_rate: int = 5,
+    method_name: str = "Q-RLSTC",
+    show_centers: bool = True,
+    show_info: bool = True,
+) -> None:
+    """Cluster scatter plot using actual trajectory points with centre highlights.
+
+    Args:
+        cluster_dict: ``{i: [avg_dist, center_traj, dists, subtrajs]}``.
+    """
+    _require_mpl()
+    _apply_style()
+    gc.collect()
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    n_clusters = len(cluster_dict)
+    colors = _get_distinct_colors(n_clusters)
+    cluster_indices = sorted(cluster_dict.keys())
+
+    for ci in cluster_indices:
+        subtrajs = cluster_dict[ci][3][::trajectory_sample_rate]
+        xs, ys = [], []
+        for traj in subtrajs:
+            pts = traj.points[::point_sample_rate]
+            xs.extend(p.x for p in pts)
+            ys.extend(p.y for p in pts)
+        ax.scatter(xs, ys, s=3, color=colors[ci],
+                   label=f"Cluster {ci + 1}", alpha=alpha)
+
+    if show_centers:
+        for ci in cluster_indices:
+            center = cluster_dict[ci][1]
+            pts = center.points[::point_sample_rate]
+            xs = [p.x for p in pts]
+            ys = [p.y for p in pts]
+            ax.plot(xs, ys, color="black", linewidth=2, marker="*",
+                    markersize=10, alpha=center_alpha,
+                    markerfacecolor=colors[ci], markeredgecolor="black")
+
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title(f"Trajectory Clusters ({method_name})")
+    ax.legend(loc="upper left", fontsize=8, ncol=2)
+
+    if show_info:
+        total = sum(len(cluster_dict[i][3]) for i in cluster_dict)
+        displayed = sum(
+            len(cluster_dict[i][3][::trajectory_sample_rate])
+            for i in cluster_dict
+        )
+        _add_info_box(ax, f"Clusters: {n_clusters}\n"
+                          f"Sub-trajs: {total}\n"
+                          f"Displayed: {displayed}")
+
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    gc.collect()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Metric computation helpers
+# ─────────────────────────────────────────────────────────────────────
+
+def compute_sse(cluster_results: Any) -> Tuple[float, int]:
+    """SSE for clustering results.
+
+    Args:
+        cluster_results: ``[(overall_sim, overall_sim, cluster_dict)]``.
+
+    Returns:
+        ``(sse, n)`` — total SSE and valid assignment count.
+    """
+    from q_rlstc.data.rlstc_trajdistance import traj2trajIED
+
+    cluster_dict = cluster_results[0][2]
+    sse, n = 0.0, 0
+    for idx in cluster_dict:
+        center = cluster_dict[idx][1]
+        for traj in cluster_dict[idx][3]:
+            d = traj2trajIED(center.points, traj.points)
+            if d < 1e9:
+                sse += d ** 2
+                n += 1
+    return sse, n
+
+
+def compute_silhouette(cluster_dict: Dict[int, Any]) -> float:
+    """Average silhouette coefficient for trajectory clustering.
+
+    Uses centre-distance pruning to avoid O(N^2) IED calls.
+
+    Returns:
+        Average silhouette in [-1, 1].
+    """
+    from q_rlstc.data.rlstc_trajdistance import traj2trajIED
+
+    all_sil: List[float] = []
+    for ci in cluster_dict:
+        cluster_trajs = cluster_dict[ci][3]
+        centre_dists: Dict[int, float] = {}
+        for oi in cluster_dict:
+            if oi != ci:
+                d = traj2trajIED(cluster_dict[ci][1].points,
+                                 cluster_dict[oi][1].points)
+                if d < 1e9:
+                    centre_dists[oi] = d
+
+        for traj in cluster_trajs:
+            if len(cluster_trajs) > 1:
+                intra = [traj2trajIED(traj.points, o.points)
+                         for o in cluster_trajs if o is not traj]
+                intra = [d for d in intra if d < 1e9]
+                a = float(np.mean(intra)) if intra else 0.0
+            else:
+                a = 0.0
+
+            b = float("inf")
+            for oi, cdist in centre_dists.items():
+                if cdist >= b:
+                    continue
+                dists = [traj2trajIED(traj.points, ot.points)
+                         for ot in cluster_dict[oi][3]]
+                dists = [d for d in dists if d < 1e9]
+                if dists:
+                    b = min(b, float(np.mean(dists)))
+
+            if b < float("inf"):
+                s = (b - a) / max(a, b) if max(a, b) > 0 else 0.0
+                all_sil.append(s)
+
+    return float(np.mean(all_sil)) if all_sil else 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Elbow / Silhouette Analysis
+# ─────────────────────────────────────────────────────────────────────
+
+def plot_elbow(
+    k_values: List[int],
+    sse_values: List[float],
+    out_path: Union[str, Path],
+    method_name: str = "",
+    n_values: Optional[List[int]] = None,
+    quantum_sse: Optional[List[float]] = None,
+    normalize: bool = True,
+) -> None:
+    """Elbow curve for optimal *k* determination."""
+    _require_mpl()
+    _apply_style()
+
+    if normalize and n_values:
+        y_vals = [s / n if n > 0 else 0 for s, n in zip(sse_values, n_values)]
+        ylabel = "Avg SSE per assignment"
+    else:
+        y_vals = list(sse_values)
+        ylabel = "SSE"
+
+    fig, ax = plt.subplots()
+    ax.plot(k_values, y_vals, "o-", color=COLORS["version_a"],
+            label="Classical", linewidth=2)
+
+    if quantum_sse is not None:
+        q_y = quantum_sse
+        if normalize and n_values:
+            q_y = [s / n if n > 0 else 0 for s, n in zip(quantum_sse, n_values)]
+        ax.plot(k_values, q_y, "s-", color=COLORS["version_b"],
+                label="Quantum", linewidth=2)
+
+    for k, y in zip(k_values, y_vals):
+        ax.annotate(f"{y:.1f}", (k, y), textcoords="offset points",
+                    xytext=(0, 8), ha="center", fontsize=8)
+
+    ax.set_xlabel("Number of Clusters (k)")
+    ax.set_ylabel(ylabel)
+    title = f"{method_name} Elbow Analysis" if method_name else "Elbow Analysis"
+    ax.set_title(title)
+    ax.set_xticks(k_values)
+    ax.legend()
+    _add_info_box(ax, f"k range: {min(k_values)}-{max(k_values)}\n"
+                      f"Min SSE at k={k_values[int(np.argmin(y_vals))]}")
+
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
+def plot_silhouette_analysis(
+    k_values: List[int],
+    silhouette_values: List[float],
+    out_path: Union[str, Path],
+    method_name: str = "",
+    quantum_silhouette: Optional[List[float]] = None,
+) -> None:
+    """Silhouette score vs *k* with best-k annotation."""
+    _require_mpl()
+    _apply_style()
+
+    fig, ax = plt.subplots()
+    ax.plot(k_values, silhouette_values, "s-", color=COLORS["ideal"],
+            label="Classical", linewidth=2)
+
+    if quantum_silhouette is not None:
+        ax.plot(k_values, quantum_silhouette, "o-", color=COLORS["version_b"],
+                label="Quantum", linewidth=2)
+
+    best_idx = int(np.argmax(silhouette_values))
+    best_k = k_values[best_idx]
+    best_score = silhouette_values[best_idx]
+    ax.axhline(y=best_score, color="green", linestyle="--", alpha=0.5)
+
+    for k, s in zip(k_values, silhouette_values):
+        ax.annotate(f"{s:.3f}", (k, s), textcoords="offset points",
+                    xytext=(0, 8), ha="center", fontsize=8)
+
+    ax.set_xlabel("Number of Clusters (k)")
+    ax.set_ylabel("Silhouette Score")
+    title = f"{method_name} Silhouette" if method_name else "Silhouette Analysis"
+    ax.set_title(title)
+    ax.set_xticks(k_values)
+    ax.legend()
+    _add_info_box(ax, f"Best: {best_score:.3f} (k={best_k})\n"
+                      f"Mean: {np.mean(silhouette_values):.3f}")
+
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Combined Classical-vs-Quantum Comparison
+# ─────────────────────────────────────────────────────────────────────
+
+def plot_combined_comparison(
+    classical_results: Dict[str, Any],
+    quantum_results: Dict[str, Any],
+    out_dir: Union[str, Path],
+    prefix: str = "comparison",
+) -> None:
+    """SSE, silhouette, and timing comparison panels.
+
+    Args:
+        classical_results: ``{"k_values", "sse", "silhouette", "times"}``.
+        quantum_results: Same structure.
+    """
+    _require_mpl()
+    _apply_style()
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    k_c = classical_results.get("k_values", [])
+    k_q = quantum_results.get("k_values", [])
+
+    if "sse" in classical_results and "sse" in quantum_results:
+        fig, ax = plt.subplots()
+        ax.plot(k_c, classical_results["sse"], "o-",
+                color=COLORS["version_a"], label="Classical", linewidth=2)
+        ax.plot(k_q, quantum_results["sse"], "s-",
+                color=COLORS["version_b"], label="Quantum", linewidth=2)
+        ax.set_xlabel("k"); ax.set_ylabel("SSE")
+        ax.set_title("SSE: Classical vs Quantum")
+        ax.legend(); ax.set_xticks(sorted(set(k_c + k_q)))
+        fig.tight_layout()
+        fig.savefig(str(out_dir / f"{prefix}_sse.png"), dpi=150, facecolor="white")
+        plt.close(fig)
+
+    if "silhouette" in classical_results and "silhouette" in quantum_results:
+        fig, ax = plt.subplots()
+        ax.plot(k_c, classical_results["silhouette"], "o-",
+                color=COLORS["version_a"], label="Classical", linewidth=2)
+        ax.plot(k_q, quantum_results["silhouette"], "s-",
+                color=COLORS["version_b"], label="Quantum", linewidth=2)
+        ax.set_xlabel("k"); ax.set_ylabel("Silhouette Score")
+        ax.set_title("Silhouette: Classical vs Quantum")
+        ax.legend(); ax.set_xticks(sorted(set(k_c + k_q)))
+        fig.tight_layout()
+        fig.savefig(str(out_dir / f"{prefix}_silhouette.png"), dpi=150,
+                    facecolor="white")
+        plt.close(fig)
+
+    if "times" in classical_results and "times" in quantum_results:
+        fig, ax = plt.subplots()
+        t_c, t_q = classical_results["times"], quantum_results["times"]
+        ax.plot(k_c, t_c, "o-", color=COLORS["version_a"],
+                label="Classical", linewidth=2)
+        ax.plot(k_q, t_q, "s-", color=COLORS["version_b"],
+                label="Quantum", linewidth=2)
+        ax.set_xlabel("k"); ax.set_ylabel("Time (s)")
+        ax.set_title("Timing: Classical vs Quantum")
+        ax.legend()
+        ratio = sum(t_c) / sum(t_q) if sum(t_q) > 0 else 0
+        _add_info_box(ax, f"Classical: {sum(t_c):.1f}s\n"
+                          f"Quantum: {sum(t_q):.1f}s\n"
+                          f"Ratio: {ratio:.2f}x")
+        fig.tight_layout()
+        fig.savefig(str(out_dir / f"{prefix}_timing.png"), dpi=150,
+                    facecolor="white")
+        plt.close(fig)
+
+    gc.collect()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Timing per-k
+# ─────────────────────────────────────────────────────────────────────
+
+def plot_timing_per_k(
+    k_values: List[int],
+    times: List[float],
+    out_path: Union[str, Path],
+    method_name: str = "",
+    breakdown: Optional[Dict[str, List[float]]] = None,
+) -> None:
+    """Execution time vs k with optional sub-component breakdown."""
+    _require_mpl()
+    _apply_style()
+
+    fig, ax = plt.subplots()
+    ax.plot(k_values, times, "o-", color=COLORS["version_b"],
+            label="Total", linewidth=2)
+    if breakdown:
+        sub_colors = [COLORS["version_a"], COLORS["ideal"], COLORS["eagle"]]
+        for (name, vals), c in zip(breakdown.items(), sub_colors):
+            ax.plot(k_values, vals, "--", color=c, alpha=0.7, label=name)
+    avg_t = float(np.mean(times))
+    ax.axhline(y=avg_t, color="gray", linestyle=":", alpha=0.5)
+    for k, t in zip(k_values, times):
+        ax.annotate(f"{t:.1f}s", (k, t), textcoords="offset points",
+                    xytext=(0, 8), ha="center", fontsize=7)
+    ax.set_xlabel("k")
+    ax.set_ylabel("Time (s)")
+    ax.set_title(f"{method_name} Timing" if method_name else "Timing Analysis")
+    ax.set_xticks(k_values)
+    ax.legend(loc="upper left")
+    _add_info_box(ax, f"Total: {sum(times):.1f}s\nAvg: {avg_t:.1f}s/k")
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Interactive Folium Map Overlay
+# ─────────────────────────────────────────────────────────────────────
+
+def plot_clusters_on_map(
+    cluster_dict: Dict[int, Any],
+    out_path: Union[str, Path],
+    center: Tuple[float, float] = (39.9, 116.4),
+    zoom: int = 12,
+    sample_rate: int = 5,
+) -> None:
+    """Interactive HTML map with coloured cluster polylines.
+
+    Args:
+        cluster_dict: ``{i: [avg_dist, center_traj, dists, subtrajs]}``.
+        out_path: Output ``.html`` path.
+        center: ``(lat, lon)`` for initial map centre.
+        zoom: Initial zoom level.
+        sample_rate: Draw every Nth sub-trajectory.
+    """
+    if not FOLIUM_AVAILABLE:
+        print("folium not installed - skipping map plot")
+        return
+
+    HEX = [
+        '#e6194B', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
+        '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990',
+    ]
+    m = folium.Map(location=list(center), zoom_start=zoom,
+                   tiles="CartoDB positron")
+
+    for ci in sorted(cluster_dict.keys()):
+        color = HEX[ci % len(HEX)]
+        ctr = cluster_dict[ci][1]
+        folium.PolyLine([[p.y, p.x] for p in ctr.points],
+                        color=color, weight=5, opacity=1.0,
+                        tooltip=f"Cluster {ci} Centre").add_to(m)
+        for traj in cluster_dict[ci][3][::sample_rate]:
+            folium.PolyLine([[p.y, p.x] for p in traj.points],
+                            color=color, weight=2, opacity=0.4,
+                            tooltip=f"Cluster {ci}").add_to(m)
+    m.save(str(out_path))
+    print(f"Map saved to {out_path}")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Paper-Style Cluster Visualization (Fig 16)
+# ─────────────────────────────────────────────────────────────────────
+
+def plot_paper_style_clusters(
+    trajectories: List[Any],
+    centroids: List[Any],
+    out_path: Union[str, Path],
+    title: str = "Clustering Results on T-Drive",
+    lon_range: Tuple[float, float] = (116.1, 116.7),
+    lat_range: Tuple[float, float] = (39.7, 40.15),
+    figsize: Tuple[int, int] = (12, 10),
+) -> None:
+    """Thin blue trajectories + thick red centroids (paper Fig 16 style)."""
+    _require_mpl()
+    _apply_style()
+    gc.collect()
+
+    fig, ax = plt.subplots(figsize=figsize)
+    for traj in trajectories:
+        if not traj:
+            continue
+        pts = traj.points if hasattr(traj, "points") else traj
+        if not pts:
+            continue
+        first = pts[0]
+        if not (lon_range[0] <= first.x <= lon_range[1]):
+            continue
+        ax.plot([p.x for p in pts], [p.y for p in pts],
+                color="blue", linewidth=0.3, alpha=0.4)
+
+    for centroid in centroids:
+        if not centroid:
+            continue
+        pts = centroid.points if hasattr(centroid, "points") else centroid
+        ax.plot([p.x for p in pts], [p.y for p in pts],
+                color="red", linewidth=3.0, alpha=0.9, solid_capstyle="round")
+
+    ax.set_xlim(*lon_range)
+    ax.set_ylim(*lat_range)
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title(title)
+    ax.legend(handles=[
+        plt.Line2D([0], [0], color="blue", lw=1, label="Trajectories"),
+        plt.Line2D([0], [0], color="red", lw=3, label="Representatives"),
+    ], loc="lower right")
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=200, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    gc.collect()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# QBAI Ansatz Analysis
+# ─────────────────────────────────────────────────────────────────────
+
+def plot_qbai_analysis(
+    selection_history: List[Dict[str, Any]],
+    out_path: Union[str, Path],
+    figsize: Tuple[int, int] = (12, 8),
+) -> None:
+    """Circuit selection / best-arm identification analysis.
+
+    Args:
+        selection_history: List of dicts with ``"round"``, ``"arms"``,
+            ``"scores"``, and ``"selected"`` keys.
+    """
+    _require_mpl()
+    _apply_style()
+
+    if not selection_history:
+        return
+
+    rounds = [h["round"] for h in selection_history]
+    arms = selection_history[0].get("arms", [])
+    n_arms = len(arms)
+    scores = np.array([h["scores"] for h in selection_history])
+
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    ax = axes[0]
+    colors = _get_distinct_colors(n_arms)
+    for j in range(n_arms):
+        ax.plot(rounds, scores[:, j], "o-", color=colors[j],
+                label=arms[j], markersize=5)
+    ax.set_xlabel("Elimination Round")
+    ax.set_ylabel("Score")
+    ax.set_title("QBAI — Arm Score Evolution")
+    ax.legend(fontsize=8)
+
+    ax2 = axes[1]
+    final = scores[-1]
+    bar_colors = [COLORS["ideal"]
+                  if arms[j] == selection_history[-1]["selected"]
+                  else COLORS["classical"] for j in range(n_arms)]
+    ax2.barh(arms, final, color=bar_colors)
+    ax2.set_xlabel("Final Score")
+    ax2.set_title("QBAI — Final Selection")
+    _add_info_box(ax2, f"Selected: {selection_history[-1]['selected']}\n"
+                       f"Rounds: {len(rounds)}")
+
+    fig.tight_layout()
+    fig.savefig(str(out_path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)

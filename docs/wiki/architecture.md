@@ -4,100 +4,89 @@
 
 ---
 
-## Three-Layer Design
+## Three-Layer Hybrid Design
 
 Q-RLSTC operates as a three-layer hybrid system. Each layer is assigned to classical or quantum execution based on algorithmic fit, hardware feasibility, and training-loop frequency.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ Layer 1: Feature Extraction & Preprocessing (CLASSICAL)              │
-│   Trajectory → MDL simplification → IED distance → 5–8D state       │
+│ Layer 1: Environment & Distance Computation (CLASSICAL)              │
+│   Trajectory → Incremental IED → 5D state observation                │
 ├──────────────────────────────────────────────────────────────────────┤
-│ Layer 2: Policy Network (QUANTUM)                                    │
-│   State → Angle Encoding → HEA/EQC Ansatz → Z-Expectation → Q-vals  │
+│ Layer 2: Policy Network (QUANTUM or CLASSICAL)                       │
+│   State → Angle Encoding → 5q HEA (3L) → Z-Expectation → Q-values   │
+│   OR: State → MLP (various sizes) → Q-values                        │
 ├──────────────────────────────────────────────────────────────────────┤
 │ Layer 3: Clustering & Evaluation (CLASSICAL)                         │
-│   Segments → Incremental updates → K-means → OD / Silhouette / F1   │
+│   Segments → Incremental center updates → ValCR evaluation           │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Data Flow
 
 ```
-Raw Data (T-Drive pickle)
+Raw Data (T-Drive / GeoLife pickle)
     │
     ▼
-pickle_loader.py               ← Load pre-processed trajectory data
+TrajRLclus.__init__()           ← Load trajectories + cluster centers
     │
     ▼
-preprocessing.py                ← MDL simplification (if raw data)
+TrajRLclus.reset(episode)      ← Compute initial IED, 5D observation
     │
     ▼
-StateFeatureExtractor           ← Classical: sequential geometric computation
-    │                              (5D for A/D, 8D for B, 5D+shadow for C)
-    ▼
-VQ-DQN Circuit (5–8 qubits)    ← Quantum: angle encode → variational layers → measure
+Agent.act(observation)          ← VQ-DQN or MLP → Q-values → ε-greedy
     │
-    ├── Q(EXTEND)
-    ├── Q(CUT)
-    └── Q(DROP/SKIP) [C/D only]
+    ├── Q(EXTEND) ← action 0
+    └── Q(CUT)    ← action 1
          │
          ▼
-    ε-greedy / SAC action selection
-         │
-         ▼
-    MDPEnvironment.step()       ← Classical: IED distance, OD proxy, boundary sharpness
-         │
-         ├── Reward → Replay Buffer → SPSA/m-SPSA Update
-         └── Next state (loop)
-         
-    Episode end:
-         │
-         ▼
-    Incremental cluster updates  ← add_to_cluster → compute_center → update_all_centers
-         │
-         ▼
-    K-means evaluation           ← OD, Silhouette, F1 metrics
+TrajRLclus.step(action)        ← Incremental IED update, segment assignment
+    │
+    ├── New observation (5D) → loop back to Agent.act()
+    └── Segment → cluster_dict[k][0] (IED) + [1] (traj) + [4] (length)
+
+Episode end:
+    │
+    ▼
+compute_overdist(clusters_E)    ← Raw ValCR = mean(IED) / base_similarity
+compute_overdist_per_point()    ← nValCR = mean(IED/len) / base_similarity
+compute_overdist_length_weighted() ← wValCR = total_IED/total_pts / base
 ```
 
 ## Design Philosophy
 
 ### Hybrid First
 
-Pure quantum solutions are not viable for NISQ. Q-RLSTC applies quantum computation _only_ where it provides value — the policy network — keeping everything else classical. This is not a compromise; it is the architecturally correct choice. See [Justifications](justifications.md) for the component-by-component analysis.
+Pure quantum solutions are not viable for NISQ. Q-RLSTC applies quantum computation _only_ where it provides value — the policy network — keeping everything else classical. This is architecturally correct, not a compromise. See [Justifications](justifications.md).
 
 ### NISQ Awareness
 
 Every circuit design decision prioritises noise resilience:
 
-- **Shallow depth** (≤11 layers): Errors compound with depth
-- **Limited qubit count** (5–8): Fewer qubits = fewer error sources
-- **Statistical averaging** (512–4096 shots): Reduces shot noise in expectations
-- **Linear/circular entanglement**: Fewer 2-qubit gates than ring or full connectivity
+- **Shallow depth**: 3 HEA layers (errors compound with depth)
+- **Limited qubits**: 5 qubits (fewer error sources)
+- **Statistical averaging**: configurable shot counts (128–4096)
+- **Linear entanglement**: fewer 2-qubit gates than ring or full connectivity
 
 ### Modularity
 
 Components are designed for independent testing and replacement:
 
-- The VQ-DQN can be swapped for a classical DQN (for controlled experiments)
-- The clustering can use purely classical distance
-- Noise models are configurable without code changes
-- All configuration is centralised in [`config.py`](../../q_rlstc/config.py)
-- Distance module (`trajdistance.py`) works identically with both systems
-- Pickle loader enables seamless data sharing with RLSTCcode
+- The VQ-DQN can be swapped for a classical MLP (Controls A/B/C) with identical training pipeline
+- Noise models and shot counts are configurable via `backends.py`
+- All experiment hyperparameters are centralised in the PROTOCOL dict (`run_thesis_experiments.py`)
+- Distance module (`rlstc_trajdistance.py`) works identically with both systems
 
-### Four Versions
+### Agent Comparison
 
-| Version | Focus | See |
-|---|---|---|
-| **A** | Scientific control — minimal quantum, matches classical dimensions | [Technical Deep Dive](technical_deep_dive.md#version-a) |
-| **B** | Quantum-native — exploits larger Hilbert space and parity readout | [Technical Deep Dive](technical_deep_dive.md#version-b) |
-| **C** | Next-gen — shadow qubit memory, EQC ansatz, SAC agent, adaptive shots | [Technical Deep Dive](technical_deep_dive.md#version-c) |
-| **D** | VLDB-aligned — strict 1:1 paper MDP reproduction with VQC substitution | [Technical Deep Dive](technical_deep_dive.md#version-d) |
+| Agent | Architecture | Params | Implementation |
+|---|---|---|---|
+| **VQ-DQN** | 5q × 3L HEA + affine head | 34 | `vqdqn_agent.py` |
+| **Control A** | 5→2 linear | 12 | `spsa_classical_agent.py` |
+| **Control B** | 5→64→2 MLP | 514 | `spsa_classical_agent.py` |
+| **Control C** | 5→32→32→2 MLP | 1,314 | `spsa_classical_agent.py` |
 
-### Reproducibility
-
-Random seeds are exposed at every level. Circuit construction is deterministic given parameters. Results should be reproducible across runs with the same seed.
+All agents share: SPSA optimizer, Double DQN, experience replay (5000), Huber loss, Q-value clamping (±10), TD target clamping (±10).
 
 ## Quantum Scope Boundary
 
@@ -105,12 +94,10 @@ Random seeds are exposed at every level. Circuit construction is deterministic g
 |---|---|---|
 | Q-value estimation | **Quantum** (VQ-DQN) | Hilbert space expressivity; clean 5→2 mapping |
 | State encoding | **Quantum** (Angle) | Bounded features → rotation angles |
-| Feature extraction | **Classical** | Sequential path-dependent geometry; no quantum speedup |
 | Distance computation | **Classical** (IED) | Incremental O(1) updates; quantum would require full re-encoding |
-| MDL simplification | **Classical** | Greedy compression; inherently sequential |
-| Clustering (K-Means) | **Classical** | Incremental center updates; no quantum centroid algorithm exists |
-| Reward computation | **Classical** | Single floating-point arithmetic |
-| Data loading | **Classical** | Pickle I/O; file system operations |
+| Clustering | **Classical** | Incremental center updates; no quantum centroid algorithm exists |
+| Reward computation | **Classical** | Single floating-point arithmetic in experiment runner |
+| Data loading | **Classical** | Pickle I/O |
 
 ---
 
