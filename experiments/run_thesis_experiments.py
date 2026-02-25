@@ -125,6 +125,8 @@ PROTOCOL = {
     "CUT_PENALTY": 0.12,
     "EXTEND_COST": 0.01,
     "COMPLEXITY_LAMBDA": 0.03,
+    "MIN_CUT_BONUS": 0.15,       # bonus for first CUT in episode (anti-collapse)
+    "COLLAPSE_CUT_THRESHOLD": 1.0,  # CUT% below this → collapsed
 }
 
 
@@ -279,6 +281,7 @@ def train_and_evaluate(
     CUT_PENALTY = PROTOCOL["CUT_PENALTY"]
     EXTEND_COST = PROTOCOL["EXTEND_COST"]
     COMPLEXITY_LAMBDA = PROTOCOL["COMPLEXITY_LAMBDA"]
+    MIN_CUT_BONUS = PROTOCOL["MIN_CUT_BONUS"]
     batch_size = PROTOCOL["batch_size"]
 
     # Tracking
@@ -358,6 +361,9 @@ def train_and_evaluate(
                     reward -= EXTEND_COST
                     epoch_extends_in_training += 1
                 if actual_action == 1:
+                    # Anti-collapse: bonus for first CUT in episode
+                    if n_cuts == 0:
+                        reward += MIN_CUT_BONUS
                     reward -= CUT_PENALTY
                     n_cuts += 1
                     epoch_cuts_in_training += 1
@@ -520,6 +526,12 @@ def train_and_evaluate(
 
     elapsed = time.time() - start_time
 
+    # Collapse detection: if best-epoch CUT% below threshold → collapsed
+    is_collapsed = best_bundle["cut_pct"] < PROTOCOL["COLLAPSE_CUT_THRESHOLD"]
+    if is_collapsed:
+        print(f"  ⚠ COLLAPSED: CUT%={best_bundle['cut_pct']:.1f}% < "
+              f"{PROTOCOL['COLLAPSE_CUT_THRESHOLD']}% — policy never learned to cut")
+
     return {
         "model": spec.name,
         "kind": spec.kind,
@@ -527,6 +539,7 @@ def train_and_evaluate(
         "params": agent.n_params,
         "run_type": spec.run_type,
         "data_fraction": spec.data_fraction,
+        "collapsed": is_collapsed,
         # Best-epoch bundle
         "val_cr": best_bundle["val_cr"],
         "val_od": best_bundle.get("val_od", 0.0),
@@ -1122,7 +1135,12 @@ def run_multi_seed_experiment(
             )
             per_seed_results.append(r)
 
-        # Aggregate across seeds
+        # ── Collapse-aware aggregation ─────────────────────────
+        n_collapsed = sum(1 for r in per_seed_results if r.get("collapsed", False))
+        healthy = [r for r in per_seed_results if not r.get("collapsed", False)]
+        if not healthy:
+            healthy = per_seed_results  # fallback: all collapsed
+
         crs = [r["val_cr"] for r in per_seed_results]
         cuts = [r["cut_pct"] for r in per_seed_results]
         segs = [r["n_segs"] for r in per_seed_results]
@@ -1134,16 +1152,26 @@ def run_multi_seed_experiment(
         t_envs = [r.get("time_env", 0.0) for r in per_seed_results]
         t_agents = [r.get("time_agent", 0.0) for r in per_seed_results]
 
+        # Healthy-seed aggregation for primary metrics
+        healthy_crs = [r["val_cr"] for r in healthy]
+        healthy_cuts = [r["cut_pct"] for r in healthy]
+
         agg = per_seed_results[0].copy()
-        agg["val_cr"] = float(np.mean(crs))
-        agg["val_cr_std"] = float(np.std(crs))
-        agg["cut_pct"] = float(np.mean(cuts))
-        agg["cut_pct_std"] = float(np.std(cuts))
+        # Primary: healthy-only mean ± std
+        agg["val_cr"] = float(np.mean(healthy_crs))
+        agg["val_cr_std"] = float(np.std(healthy_crs))
+        agg["cut_pct"] = float(np.mean(healthy_cuts))
+        agg["cut_pct_std"] = float(np.std(healthy_cuts))
         agg["n_segs"] = int(np.mean(segs))
         agg["wall_time"] = float(np.sum(times))
         agg["n_seeds"] = len(seeds)
+        agg["n_collapsed"] = n_collapsed
         agg["per_seed_crs"] = crs
         agg["per_seed_cuts"] = cuts
+        agg["per_seed_collapsed"] = [r.get("collapsed", False) for r in per_seed_results]
+        # Full-population (all seeds) for reference
+        agg["val_cr_all"] = float(np.mean(crs))
+        agg["val_cr_all_std"] = float(np.std(crs))
         # SSE
         agg["sse"] = float(np.mean(sses))
         agg["sse_std"] = float(np.std(sses))
@@ -1157,37 +1185,46 @@ def run_multi_seed_experiment(
         if qms:
             agg["q_margins"] = [float(np.mean(qms))]
             agg["q_margin_std"] = float(np.std(qms))
+
+        if n_collapsed:
+            print(f"  ⚠ {spec.name}: {n_collapsed}/{len(seeds)} seeds collapsed "
+                  f"(healthy-only ValCR={agg['val_cr']:.4f}±{agg['val_cr_std']:.4f}, "
+                  f"all-seeds={agg['val_cr_all']:.4f}±{agg['val_cr_all_std']:.4f})")
         aggregated.append(agg)
 
     return aggregated
 
 
 def print_multi_seed_table(results: List[Dict], experiment: str):
-    """Print summary table with mean±std for multi-seed results."""
-    print(f"\n{'═'*100}")
-    print(f"  {experiment} — Multi-Seed Summary ({results[0].get('n_seeds', 1)} seeds)")
-    print(f"{'═'*100}\n")
+    """Print summary table with mean±std for multi-seed results (lower ValCR = better)."""
+    print(f"\n{'═'*110}")
+    n_seeds = results[0].get('n_seeds', 1)
+    print(f"  {experiment} — Multi-Seed Summary ({n_seeds} seeds) | ValCR: lower = better")
+    print(f"{'═'*110}\n")
 
-    header = (f"{'Model':<30s} {'Params':>6s} {'ValCR':>14s} "
-              f"{'CUT%':>12s} {'#Segs':>6s} {'Time':>8s} {'Qmargin':>14s}")
+    header = (f"{'Model':<30s} {'Params':>6s} {'ValCR (healthy)':>18s} "
+              f"{'CUT%':>12s} {'Coll':>5s} {'#Segs':>6s} {'Time':>8s} {'Qmargin':>14s}")
     print(header)
-    print("─" * 100)
+    print("─" * 110)
 
     for r in results:
         cr_str = f"{r['val_cr']:.4f}±{r.get('val_cr_std', 0):.4f}"
         cut_str = f"{r['cut_pct']:.0f}%±{r.get('cut_pct_std', 0):.0f}%"
+        n_coll = r.get('n_collapsed', 0)
+        coll_str = f"{n_coll}/{r.get('n_seeds', 1)}"
         qm = r.get("q_margins", [])
         qm_std = r.get("q_margin_std", 0)
         qm_str = f"{qm[-1]:+.3f}±{qm_std:.3f}" if qm else "N/A"
         print(f"{r['model']:<30s} "
               f"{r['params']:>6d} "
-              f"{cr_str:>14s} "
+              f"{cr_str:>18s} "
               f"{cut_str:>12s} "
+              f"{coll_str:>5s} "
               f"{r['n_segs']:>6d} "
               f"{r['wall_time']:>7.0f}s "
               f"{qm_str:>14s}")
 
-    print("─" * 100)
+    print("─" * 110)
 
 
 def print_pareto_table(d1_results, agent_results: List[Dict]):
@@ -1197,7 +1234,7 @@ def print_pareto_table(d1_results, agent_results: List[Dict]):
     """
     thresholds = [5, 10, 20, 30, 40, 50, 80]
     print(f"\n{'═'*80}")
-    print("  Pareto: Best ValCR at CUT ≤ threshold")
+    print("  Pareto: Lowest (best) ValCR at CUT ≤ threshold  [lower = better]")
     print(f"{'═'*80}\n")
 
     header = f"{'CUT ≤':<8s}"
@@ -1333,6 +1370,48 @@ def generate_plots(all_experiment_results: Dict, plot_dir: Path):
         plt.close(fig)
         n_plots += 1
         print(f"  ✓ pareto_valcr_vs_cut.png")
+
+    # ── Diagnostic: per-seed CUT% vs ValCR & #segs vs OD ────────
+    for exp_name, exp_data in all_experiment_results.items():
+        if not isinstance(exp_data, list):
+            continue
+        for r in exp_data:
+            if not r.get("val_cut_pcts") or not r.get("val_crs"):
+                continue
+            safe_name = r["model"].replace(" ", "_").replace("/", "")
+            # CUT% vs ValCR per epoch
+            fig, ax = plt.subplots(figsize=(6, 4))
+            epochs_x = list(range(1, len(r["val_cut_pcts"]) + 1))
+            ax.scatter(r["val_cut_pcts"], r["val_crs"], c=epochs_x,
+                       cmap="viridis", s=60, edgecolors="black", linewidth=0.5)
+            for i, (cx, cy) in enumerate(zip(r["val_cut_pcts"], r["val_crs"])):
+                ax.annotate(f"E{i+1}", (cx, cy), fontsize=7,
+                            textcoords="offset points", xytext=(4, 4))
+            ax.set_xlabel("CUT%")
+            ax.set_ylabel("ValCR (lower = better)")
+            collapsed_tag = " [COLLAPSED]" if r.get("collapsed") else ""
+            ax.set_title(f"{r['model']}: CUT% vs ValCR{collapsed_tag}")
+            fig.tight_layout()
+            fig.savefig(str(plot_dir / f"diag_cut_vs_cr_{safe_name}.png"), dpi=120)
+            plt.close(fig)
+            n_plots += 1
+
+            # #segs vs OD per epoch
+            if r.get("val_ods") and r.get("val_seg_counts"):
+                fig, ax = plt.subplots(figsize=(6, 4))
+                ax.scatter(r["val_seg_counts"], r["val_ods"], c=epochs_x,
+                           cmap="plasma", s=60, edgecolors="black", linewidth=0.5)
+                for i, (sx, sy) in enumerate(zip(r["val_seg_counts"], r["val_ods"])):
+                    ax.annotate(f"E{i+1}", (sx, sy), fontsize=7,
+                                textcoords="offset points", xytext=(4, 4))
+                ax.set_xlabel("#Segments")
+                ax.set_ylabel("OD (lower = better)")
+                ax.set_title(f"{r['model']}: #Segs vs OD{collapsed_tag}")
+                fig.tight_layout()
+                fig.savefig(str(plot_dir / f"diag_segs_vs_od_{safe_name}.png"), dpi=120)
+                plt.close(fig)
+                n_plots += 1
+        print(f"  ✓ diagnostics for {exp_name}")
 
     # ── D2: Q-margin evolution ──────────────────────────────────
     for exp_name, exp_data in all_experiment_results.items():

@@ -71,14 +71,18 @@ Because no single normalisation fully corrects the length coupling, we adopt **b
 Multi-seed evaluation reveals two distinct failure modes that must be reported, not hidden:
 
 **Failure Mode A: Never-Cut Policy (Real Collapse)**
-- Symptoms: Val CUT% ≈ 0%, very few segments, high OD
+- Symptoms: Val CUT% ≈ 0%, very few segments, high OD, ValCR ≈ 1.0
 - Cause: Agent stuck in EXTEND-only basin (insufficient exploration or reward signal)
 - Diagnosis: Q-margin is strongly negative from the start; agent never learns to differentiate actions
+- **Detection:** Seeds with best-epoch CUT% < 1% are automatically flagged as `collapsed`
+- **Mitigation (training):** A `MIN_CUT_BONUS` (+0.15) is applied to the first CUT action per episode, providing a one-time incentive to explore cutting. This does not distort subsequent cut/extend balance but breaks the "never-cut is always safe" equilibrium.
+- **Mitigation (reporting):** Collapsed seeds are excluded from primary aggregation statistics. The summary table reports `N_collapsed/N_seeds` and provides both healthy-only and all-seed statistics for transparency.
 
 **Failure Mode B: CR Blowup (Denominator Pathology)**
 - Symptoms: ValCR extremely high, but OD not proportionally high; basesim ≈ 0
 - Cause: Validation trajectory split happens to include trajectories very close to cluster centres
 - Diagnosis: OD/basesim decomposition reveals small denominator; median CR is substantially lower than mean CR
+- **Corrected:** Dynamic fold-specific basesim computation (§4.2) eliminates the static-denominator variant of this failure.
 
 Across seeds, VQ-DQN typically improves rapidly by epoch 2, but exhibits occasional failure modes. We therefore report robust statistics (median CR) and analyze collapse cases explicitly rather than averaging over them.
 

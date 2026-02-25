@@ -78,7 +78,7 @@ Every pipeline component except the function approximator is identical across al
 
 | Component | Shared? |
 |---|---|
-| State representation, action space, reward, replay buffer, ε-schedule, target network, loss, dataset, distance metric, L_MIN, Q/TD clamping | ✅ Identical |
+| State representation, action space, reward, replay buffer, ε-schedule, target network, loss, dataset, distance metric, L_MIN, Q/TD clamping, anti-collapse bonus | ✅ Identical |
 | **Function approximator** | ❌ Experimental variable |
 | Optimiser | SPSA for quantum + SPSA cohort; Adam for Adam cohort |
 
@@ -123,9 +123,10 @@ Every pipeline component except the function approximator is identical across al
 
 | Component | Method |
 |---|---|
-| Aggregation | Mean ± std of per-seed best-epoch ValCR |
+| Aggregation | Mean ± std of per-seed best-epoch ValCR (**healthy seeds only**; collapsed seeds reported separately) |
 | Best-epoch selection | Argmin ValCR across epochs; earliest epoch breaks ties |
-| Significance | Mann-Whitney U (nonparametric pairwise) |
+| Collapse detection | Seeds with best-epoch CUT% < 1% flagged as **collapsed** (never-cut policy) |
+| Significance | Mann-Whitney U (nonparametric pairwise, healthy seeds only) |
 | Effect size | Cohen's d with interpretation labels |
 | Confidence interval | Bootstrap 95% CI on mean difference (10,000 resamples) |
 
