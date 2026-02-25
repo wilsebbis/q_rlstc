@@ -22,6 +22,9 @@ Q-RLSTC uses a **Variational Quantum Deep Q-Network (VQ-DQN)** to learn optimal 
 | [Quantum Circuit](wiki/quantum_circuit.md) | VQ-DQN circuit architecture |
 | [API Reference](wiki/api_reference.md) | Module-level API documentation |
 | [Project Structure](wiki/project_structure.md) | Directory layout and module dependencies |
+| [Thesis Contributions](wiki/thesis_contributions.md) | C1–C4 contributions and honest scope |
+| [Experimental Setup](wiki/experimental_setup.md) | Reproducibility protocol and hyperparameters |
+| [Scope Evolution](wiki/scope_evolution.md) | How the research question was refined |
 
 ## Architecture at a Glance
 

@@ -1,0 +1,117 @@
+{
+  "protocol": {
+    "source": "RLSTCcode (classical baseline)",
+    "architecture": "DQN Dense(5\u219264\u21922)",
+    "params": 514,
+    "optimizer": "SGD (lr=0.001)",
+    "gamma": 0.99,
+    "target_update": "soft (\u03c4=0.05)",
+    "double_dqn": false,
+    "batch_size": 32,
+    "memory_size": 5000,
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.1,
+    "epsilon_decay": 0.99
+  },
+  "env": {
+    "timestamp": "2026-02-24T20:12:42.769722",
+    "savemodels_path": "/Users/wilsebbis/Library/Mobile Documents/com~apple~CloudDocs/iCloud Downloads/savemodels"
+  },
+  "data_size_experiment": [
+    {
+      "label": "1k trajectories",
+      "folder": "1kmodels",
+      "trajectories": 1000,
+      "val_cr": 0.7386836329
+    },
+    {
+      "label": "2k trajectories",
+      "folder": "2kmodels",
+      "trajectories": 2000,
+      "val_cr": 0.6696299475
+    },
+    {
+      "label": "3k trajectories",
+      "folder": "3kmodels",
+      "trajectories": 3000,
+      "val_cr": 0.5891774235
+    },
+    {
+      "label": "4k trajectories",
+      "folder": "4kmodels",
+      "trajectories": 4000,
+      "val_cr": 0.605936325
+    },
+    {
+      "label": "5k trajectories",
+      "folder": "5kmodels",
+      "trajectories": 5000,
+      "val_cr": 0.6709888949
+    }
+  ],
+  "kfold_cv": {
+    "k": 5,
+    "folds": [
+      {
+        "fold": 0,
+        "folder": "kfoldmodels0",
+        "val_cr": 0.7897929615
+      },
+      {
+        "fold": 1,
+        "folder": "kfoldmodels1",
+        "val_cr": 0.7079982166
+      },
+      {
+        "fold": 2,
+        "folder": "kfoldmodels2",
+        "val_cr": 0.7495791051
+      },
+      {
+        "fold": 3,
+        "folder": "kfoldmodels3",
+        "val_cr": 0.8024142289
+      },
+      {
+        "fold": 4,
+        "folder": "kfoldmodels4",
+        "val_cr": 0.7219071063
+      }
+    ],
+    "mean_cr": 0.7543383237,
+    "std_cr": 0.0368514954
+  },
+  "cluster_count_experiment": [
+    {
+      "label": "k=5",
+      "k": 5,
+      "folder": "modelsk5",
+      "val_cr": 0.6208912824
+    },
+    {
+      "label": "k=8",
+      "k": 8,
+      "folder": "modelsk8",
+      "val_cr": 0.7272835017
+    },
+    {
+      "label": "k=12",
+      "k": 12,
+      "folder": "modelsk12",
+      "val_cr": 0.8174934425
+    },
+    {
+      "label": "k=14",
+      "k": 14,
+      "folder": "modelsk14",
+      "val_cr": 0.8205582301
+    }
+  ],
+  "other_models": [
+    {
+      "label": "modelstate4",
+      "folder": "modelstate4",
+      "val_cr": 1.5452601019
+    }
+  ]
+}

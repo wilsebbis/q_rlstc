@@ -596,6 +596,72 @@ def compute_overdist_length_weighted(cluster_dict: Dict[int, list]) -> float:
     return total_distance / total_points if total_points > 0 else 0.0
 
 
+def compute_sse(cluster_dict: Dict[int, list]) -> float:
+    """Compute Sum of Squared Errors (SSE) across all clusters.
+
+    SSE = sum_i sum_{s in C_i} IED(s, center_i)^2
+
+    Captures within-cluster compactness as a squared penalty,
+    complementing the linear-average OD/ValCR metric.  SSE penalises
+    outlier segments more heavily and is analogous to the k-means
+    objective function adapted to the IED distance.
+
+    Args:
+        cluster_dict: Full cluster dictionary.
+
+    Returns:
+        Total SSE across all clusters.
+    """
+    sse = 0.0
+    for cluster_id in cluster_dict:
+        distances = cluster_dict[cluster_id][0]
+        if distances:
+            sse += sum(d * d for d in distances)
+    return sse
+
+
+def compute_cluster_summary(
+    cluster_dict: Dict[int, list],
+    basesim: float,
+) -> Dict[str, Any]:
+    """Compute a full suite of clustering quality metrics.
+
+    Returns a dictionary with:
+        - od: raw Overall Distance
+        - val_cr: Competitive Ratio (od / basesim)
+        - sse: Sum of Squared Errors
+        - n_segments: total segments assigned
+        - n_active_clusters: clusters with at least one segment
+        - mean_cluster_size: average segments per active cluster
+
+    Args:
+        cluster_dict: Full cluster dictionary.
+        basesim: Baseline distance for CR computation.
+
+    Returns:
+        Dictionary of metrics.
+    """
+    od = compute_overdist(cluster_dict)
+    sse = compute_sse(cluster_dict)
+
+    n_segments = 0
+    n_active = 0
+    for cluster_id in cluster_dict:
+        n = len(cluster_dict[cluster_id][0])
+        if n > 0:
+            n_segments += n
+            n_active += 1
+
+    return {
+        "od": od,
+        "val_cr": od / basesim if basesim > 0 else float("inf"),
+        "sse": sse,
+        "n_segments": n_segments,
+        "n_active_clusters": n_active,
+        "mean_cluster_size": n_segments / n_active if n_active > 0 else 0.0,
+    }
+
+
 # ─── Cluster center re-estimation ─────────────────────────────────────
 
 

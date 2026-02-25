@@ -207,6 +207,29 @@ def build_agent(spec: ModelSpec, seed: int):
 #  Unified training loop (with diagnostic hooks)
 # ═══════════════════════════════════════════════════════════════════════
 
+def compute_fold_basesim(env, sidx, eidx):
+    """Compute baseline OD (always-extend) for a specific validation fold."""
+    from q_rlstc.data.rlstc_cluster import compute_overdist
+    from collections import defaultdict
+    for i in env.clusters_E.keys():
+        env.clusters_E[i][0] = []
+        env.clusters_E[i][1] = []
+        env.clusters_E[i][3] = defaultdict(list)
+    for e in range(sidx, eidx):
+        obs, steps = env.reset(e, "E")
+        for idx in range(1, steps):
+            env.step(e, 0, idx, "E")
+    try:
+        fold_od = float(compute_overdist(env.clusters_E))
+    except (ZeroDivisionError, ValueError):
+        fold_od = 1.0
+    for i in env.clusters_E.keys():
+        env.clusters_E[i][0] = []
+        env.clusters_E[i][1] = []
+        env.clusters_E[i][3] = defaultdict(list)
+    return fold_od
+
+
 def train_and_evaluate(
     agent,
     spec: ModelSpec,
@@ -219,7 +242,7 @@ def train_and_evaluate(
     """Run training + evaluation for one model with diagnostic instrumentation."""
 
     from q_rlstc.data.rlstc_mdp import TrajRLclus
-    from q_rlstc.data.rlstc_cluster import compute_overdist
+    from q_rlstc.data.rlstc_cluster import compute_overdist, compute_sse
     from q_rlstc.rl.replay_buffer import ReplayBuffer
     from q_rlstc.data.trajectory_scheduler import TrajectoryScheduler
 
@@ -237,6 +260,7 @@ def train_and_evaluate(
     sidx, eidx = scheduler.validation_range()
 
     env = TrajRLclus(traj_path, centers_path, centers_path)
+    fold_basesim = compute_fold_basesim(env, sidx, eidx)
     replay = ReplayBuffer(max_size=PROTOCOL["memory_size"], seed=seed)
 
     _ied_scale = max(env.basesim_T, 1e-8)
@@ -260,11 +284,21 @@ def train_and_evaluate(
     # Tracking
     all_rewards = []
     val_crs, val_cut_pcts, val_seg_counts = [], [], []
+    val_ods = []            # Raw OD per epoch (numerator of CR)
+    val_basesims = []       # basesim per epoch (denominator of CR)
+    val_cr_medians = []     # Median per-trajectory CR per epoch
+    val_sses = []           # SSE per epoch
     q_margins = []          # D2: mean(Q_extend - Q_cut) per epoch (all val steps)
     replay_cut_pcts = []    # D3: CUT ratio in training actions per epoch
     replay_buf_cut_pcts = []  # D5: CUT ratio in actual replay buffer
     best_bundle = {"val_cr": float("inf"), "cut_pct": 0.0,
-                   "n_segs": 0, "epoch": -1, "avg_reward": 0.0}
+                   "n_segs": 0, "epoch": -1, "avg_reward": 0.0, "sse": 0.0}
+    # Sample efficiency: total episodes and actions processed
+    total_episodes = 0
+    total_actions = 0
+    # Timing breakdown
+    time_env = 0.0    # environment step time
+    time_agent = 0.0  # agent act + update time
 
     start_time = time.time()
 
@@ -300,14 +334,20 @@ def train_and_evaluate(
             observation = normalize_obs(observation)
             episode_reward = 0.0
             n_cuts, n_steps = 0, 0
+            total_episodes += 1
 
             for index in range(1, steps):
                 done = (index == steps - 1)
+                t_act = time.time()
                 action = agent.act(observation)
+                time_agent += time.time() - t_act
 
+                t_env = time.time()
                 observation_, reward = env.step(episode, action, index, "T")
+                time_env += time.time() - t_env
                 actual_action = env._last_action
                 raw_split_od_next = observation_.flatten()[1]
+                total_actions += 1
 
                 if actual_action == 0 and reward == 0:
                     reward = raw_split_od - raw_split_od_next
@@ -336,7 +376,9 @@ def train_and_evaluate(
                 if replay.is_ready(batch_size):
                     states, actions, rewards_b, next_states, dones = \
                         replay.sample_batch(batch_size)
+                    t_upd = time.time()
                     agent.update(states, actions, rewards_b, next_states, dones)
+                    time_agent += time.time() - t_upd
 
                 observation = observation_
 
@@ -381,10 +423,32 @@ def train_and_evaluate(
 
         try:
             val_od = compute_overdist(env.clusters_E)
-            val_cr = float(val_od / env.basesim_E)
+            val_basesim = fold_basesim
+            val_cr = float(val_od / max(val_basesim, 1e-8))  # ε-stabilised
         except (ZeroDivisionError, ValueError):
+            val_od = float('inf')
+            val_basesim = 0.0
             val_cr = float('inf')
         val_crs.append(val_cr)
+        val_ods.append(float(val_od))
+        val_basesims.append(val_basesim)
+
+        # Per-trajectory CR for median (robust to denominator blowup)
+        per_traj_crs = []
+        for cid in env.clusters_E.keys():
+            dists = env.clusters_E[cid][0]
+            if dists:
+                traj_od = sum(dists) / len(dists)
+                traj_cr = traj_od / max(val_basesim, 1e-8)
+                per_traj_crs.append(traj_cr)
+        val_cr_median = float(np.median(per_traj_crs)) if per_traj_crs else val_cr
+        val_cr_medians.append(val_cr_median)
+
+        try:
+            val_sse = float(compute_sse(env.clusters_E))
+        except (ZeroDivisionError, ValueError):
+            val_sse = float('inf')
+        val_sses.append(val_sse)
 
         val_total = val_n_extend + val_n_cut
         cut_pct = 100 * val_n_cut / val_total if val_total else 0
@@ -419,8 +483,13 @@ def train_and_evaluate(
             improved = " ★"
             best_bundle = {
                 "val_cr": val_cr, "cut_pct": cut_pct,
+                "val_od": float(val_od), "val_basesim": val_basesim,
+                "val_cr_median": val_cr_median,
                 "n_segs": val_segs, "epoch": epoch + 1,
                 "avg_reward": float(np.mean(epoch_rewards)),
+                "sse": val_sse,
+                "episodes_to_best": total_episodes,
+                "actions_to_best": total_actions,
             }
 
         # Q diagnostic: use first real val observation (not arbitrary)
@@ -430,7 +499,8 @@ def train_and_evaluate(
                       f" Q̄cut={np.mean(q_cut_vals):+.3f}")
 
         print(f"  Epoch {epoch+1:2d}/{n_epochs}: "
-              f"ValCR={val_cr:.4f} | "
+              f"ValCR={val_cr:.4f} (OD={val_od:.4f}/bs={val_basesim:.4f}) "
+              f"medCR={val_cr_median:.4f} | "
               f"R̄={np.mean(epoch_rewards):+.3f} | "
               f"CUT={cut_pct:.0f}% | "
               f"#segs={val_segs} | "
@@ -459,23 +529,40 @@ def train_and_evaluate(
         "data_fraction": spec.data_fraction,
         # Best-epoch bundle
         "val_cr": best_bundle["val_cr"],
+        "val_od": best_bundle.get("val_od", 0.0),
+        "val_basesim": best_bundle.get("val_basesim", 0.0),
+        "val_cr_median": best_bundle.get("val_cr_median", 0.0),
         "cut_pct": best_bundle["cut_pct"],
         "n_segs": best_bundle["n_segs"],
         "best_epoch": best_bundle["epoch"],
+        "sse": best_bundle.get("sse", 0.0),
+        # Sample efficiency
+        "episodes_to_best": best_bundle.get("episodes_to_best", total_episodes),
+        "actions_to_best": best_bundle.get("actions_to_best", total_actions),
+        "total_episodes": total_episodes,
+        "total_actions": total_actions,
         # Final-epoch metrics
         "final_val_cr": val_crs[-1] if val_crs else float('inf'),
         "final_cut_pct": val_cut_pcts[-1] if val_cut_pcts else 0.0,
         "final_n_segs": val_seg_counts[-1] if val_seg_counts else 0,
+        "final_sse": val_sses[-1] if val_sses else 0.0,
         # Per-epoch series
         "val_crs": val_crs,
+        "val_ods": val_ods,
+        "val_basesims": val_basesims,
+        "val_cr_medians": val_cr_medians,
         "val_cut_pcts": val_cut_pcts,
         "val_seg_counts": val_seg_counts,
+        "val_sses": val_sses,
         "q_margins": q_margins,
         "replay_cut_pcts": replay_cut_pcts,
         "replay_buf_cut_pcts": replay_buf_cut_pcts,
         "all_rewards": [float(r) for r in all_rewards],
-        # Timing
+        # Timing breakdown
         "wall_time": elapsed,
+        "time_env": time_env,
+        "time_agent": time_agent,
+        "time_overhead": elapsed - time_env - time_agent,
     }
 
 
@@ -549,6 +636,186 @@ def get_ablation_entanglement_specs():
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  RA1: Reward Ablation — naive vs shaped reward
+# ═══════════════════════════════════════════════════════════════════════
+
+def run_ra1_reward_ablation(traj_path, centers_path, n_traj, n_epochs, seed=42):
+    """RA1 — Reward ablation: demonstrate CR degeneracy under naive reward.
+
+    Trains VQ-DQN under two reward regimes:
+      (a) SHAPED: with L_MIN, CUT_PENALTY, EXTEND_COST, COMPLEXITY_LAMBDA
+      (b) NAIVE:  raw OD improvement only — no anti-gaming constraints
+
+    If the degeneracy argument holds, the naive variant should converge to
+    near-always-cut (CUT% → 100%) with artificially low ValCR.
+    """
+    from q_rlstc.data.rlstc_mdp import TrajRLclus
+    from q_rlstc.data.rlstc_cluster import compute_overdist, compute_sse
+    from q_rlstc.rl.replay_buffer import ReplayBuffer
+    from q_rlstc.data.trajectory_scheduler import TrajectoryScheduler
+
+    conditions = [
+        ("VQ-DQN (shaped)",  PROTOCOL["L_MIN"], PROTOCOL["CUT_PENALTY"],
+         PROTOCOL["EXTEND_COST"], PROTOCOL["COMPLEXITY_LAMBDA"]),
+        ("VQ-DQN (naive)",   1, 0.0, 0.0, 0.0),
+    ]
+
+    print(f"\n{'═'*80}")
+    print("  RA1: REWARD ABLATION — Naive vs Shaped Reward")
+    print(f"  Demonstrates CR degeneracy under naive reward (no constraints)")
+    print(f"{'═'*80}\n")
+
+    results = []
+    for cond_name, l_min, cut_pen, ext_cost, comp_lam in conditions:
+        np.random.seed(seed)
+        random.seed(seed)
+
+        spec = ModelSpec(cond_name, "quantum", n_layers=3)
+        agent = build_agent(spec, seed)
+
+        scheduler = TrajectoryScheduler(
+            n_trajectories=n_traj, validation_pct=0.1,
+            mode="standard", seed=seed)
+        sidx, eidx = scheduler.validation_range()
+
+        env = TrajRLclus(traj_path, centers_path, centers_path)
+        fold_basesim = compute_fold_basesim(env, sidx, eidx)
+        replay = ReplayBuffer(max_size=PROTOCOL["memory_size"], seed=seed)
+        _ied_scale = max(env.basesim_T, 1e-8)
+
+        def normalize_obs(obs):
+            o = obs.copy().flatten()
+            o[0] /= _ied_scale; o[1] /= _ied_scale; o[2] /= _ied_scale * 10
+            return o.reshape(obs.shape)
+        def scale_reward(r):
+            return float(np.clip(r / _ied_scale, -1.0, 1.0))
+
+        batch_size = PROTOCOL["batch_size"]
+        best_cr = float("inf")
+        start_time = time.time()
+
+        print(f"\n  {cond_name}  (L_MIN={l_min}, CUT_PEN={cut_pen}, "
+              f"EXT_COST={ext_cost}, COMP_LAM={comp_lam})")
+        print(f"  {'-'*55}")
+
+        epoch_data = []
+        for epoch in range(n_epochs):
+            idxlist = scheduler.sample_epoch()
+            epoch_start = time.time()
+            _last_tick = epoch_start
+
+            for ep_idx, episode in enumerate(idxlist):
+                now = time.time()
+                if now - _last_tick >= 30:
+                    print(f"    ⏱ {now - start_time:.0f}s total | "
+                          f"epoch {epoch+1}/{n_epochs} | "
+                          f"episode {ep_idx+1}/{len(idxlist)}", flush=True)
+                    _last_tick = now
+
+                obs, steps = env.reset(episode, "T")
+                raw_split_od = obs.flatten()[1]
+                obs = normalize_obs(obs)
+                n_cuts, n_steps = 0, 0
+
+                for index in range(1, steps):
+                    done = (index == steps - 1)
+                    action = agent.act(obs)
+                    obs_, reward = env.step(episode, action, index, "T")
+                    actual = env._last_action
+                    raw_next = obs_.flatten()[1]
+
+                    if actual == 0 and reward == 0:
+                        reward = raw_split_od - raw_next
+                    reward = scale_reward(reward)
+
+                    # Apply shaping (or not)
+                    if actual == 0:
+                        reward -= ext_cost
+                    if actual == 1:
+                        reward -= cut_pen
+                        n_cuts += 1
+                    n_steps += 1
+
+                    raw_split_od = raw_next
+                    obs_ = normalize_obs(obs_)
+                    replay.add(obs.flatten(), actual, reward, obs_.flatten(), done)
+                    if done:
+                        break
+                    if replay.is_ready(batch_size):
+                        s, a, r, ns, d = replay.sample_batch(batch_size)
+                        agent.update(s, a, r, ns, d)
+                    obs = obs_
+
+                if n_steps > 0 and comp_lam > 0:
+                    pass  # complexity reg applied via outer reward
+                agent.decay_epsilon()
+
+            # Validation
+            val_n_cut, val_n_ext = 0, 0
+            for e in range(sidx, eidx):
+                ob, s = env.reset(e, "E")
+                ob = normalize_obs(ob)
+                for idx in range(1, s):
+                    act = agent.act(ob, greedy=True)
+                    ob, _ = env.step(e, act, idx, "E")
+                    if env._last_action == 1:
+                        val_n_cut += 1
+                    else:
+                        val_n_ext += 1
+                    ob = normalize_obs(ob)
+
+            try:
+                val_od = compute_overdist(env.clusters_E)
+                val_cr = float(val_od / max(fold_basesim, 1e-8))
+            except (ZeroDivisionError, ValueError):
+                val_cr = float('inf')
+
+            val_total = val_n_cut + val_n_ext
+            cut_pct = 100 * val_n_cut / val_total if val_total > 0 else 0
+
+            epoch_data.append({"epoch": epoch+1, "val_cr": val_cr, "cut_pct": cut_pct})
+            marker = " ★" if val_cr < best_cr else ""
+            if val_cr < best_cr:
+                best_cr = val_cr
+            print(f"    Epoch {epoch+1}: ValCR={val_cr:.4f} CUT={cut_pct:.0f}%{marker}")
+
+            for i in env.clusters_E.keys():
+                env.clusters_E[i][0] = []; env.clusters_E[i][1] = []
+                env.clusters_E[i][3] = defaultdict(list)
+            env.update_cluster("T")
+            scheduler.update()
+
+        elapsed = time.time() - start_time
+        r = {
+            "condition": cond_name,
+            "l_min": l_min, "cut_penalty": cut_pen,
+            "extend_cost": ext_cost, "complexity_lambda": comp_lam,
+            "best_val_cr": best_cr,
+            "final_cut_pct": epoch_data[-1]["cut_pct"],
+            "epoch_data": epoch_data,
+            "wall_time": elapsed,
+        }
+        results.append(r)
+
+    # Verdict
+    print(f"\n{'─'*60}")
+    naive = [r for r in results if "naive" in r["condition"].lower()]
+    shaped = [r for r in results if "shaped" in r["condition"].lower()]
+    if naive and shaped:
+        n_cut = naive[0]["final_cut_pct"]
+        s_cut = shaped[0]["final_cut_pct"]
+        print(f"  NAIVE  → CUT={n_cut:.0f}%, ValCR={naive[0]['best_val_cr']:.4f}")
+        print(f"  SHAPED → CUT={s_cut:.0f}%, ValCR={shaped[0]['best_val_cr']:.4f}")
+        if n_cut > 80:
+            print(f"  ✓ Degeneracy CONFIRMED: naive policy converges to CUT={n_cut:.0f}%")
+        else:
+            print(f"  ⚠ Naive CUT% = {n_cut:.0f}% — partially degenerate")
+    print(f"{'─'*60}")
+
+    return {"experiment": "RA1", "results": results}
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  D1: ValCR vs CUT% sweep
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -582,6 +849,7 @@ def run_d1_valcr_sweep(traj_path, centers_path, n_traj, seed=42):
         env = TrajRLclus(traj_path, centers_path, centers_path)
         val_pct = 0.1
         sidx = int(n_traj * (1 - val_pct))
+        fold_basesim = compute_fold_basesim(env, sidx, n_traj)
 
         # Train pass
         for episode in range(n_traj):
@@ -613,20 +881,20 @@ def run_d1_valcr_sweep(traj_path, centers_path, n_traj, seed=42):
 
         try:
             val_od = compute_overdist(env.clusters_E)
-            val_cr = float(val_od / env.basesim_E)
+            val_cr = float(val_od / max(fold_basesim, 1e-8))
         except (ZeroDivisionError, ValueError):
             val_cr = float('inf')
 
         # Normalized variants
         try:
             val_pp = compute_overdist_per_point(env.clusters_E)
-            n_val_cr = float(val_pp / env.basesim_E)
+            n_val_cr = float(val_pp / max(fold_basesim, 1e-8))
         except (ZeroDivisionError, ValueError):
             n_val_cr = float('inf')
 
         try:
             val_lw = compute_overdist_length_weighted(env.clusters_E)
-            w_val_cr = float(val_lw / env.basesim_E)
+            w_val_cr = float(val_lw / max(fold_basesim, 1e-8))
         except (ZeroDivisionError, ValueError):
             w_val_cr = float('inf')
 
@@ -706,6 +974,7 @@ def run_d4_policy_basin(traj_path, centers_path, n_traj, seed=42):
         sidx, eidx = scheduler.validation_range()
 
         env = TrajRLclus(traj_path, centers_path, centers_path)
+        fold_basesim = compute_fold_basesim(env, sidx, eidx)
 
         # Training pass with drift schedule
         for epoch in range(3):
@@ -741,9 +1010,10 @@ def run_d4_policy_basin(traj_path, centers_path, n_traj, seed=42):
 
         try:
             val_od = compute_overdist(env.clusters_E)
-            val_cr = float(val_od / env.basesim_E)
+            val_cr = float(val_od / max(fold_basesim, 1e-8))
         except (ZeroDivisionError, ValueError):
             val_cr = float('inf')
+
 
         total_actions = total_cuts + total_extends
         actual_cut_pct = 100 * total_cuts / total_actions if total_actions else 0
@@ -858,6 +1128,11 @@ def run_multi_seed_experiment(
         segs = [r["n_segs"] for r in per_seed_results]
         times = [r["wall_time"] for r in per_seed_results]
         qms = [r["q_margins"][-1] for r in per_seed_results if r.get("q_margins")]
+        sses = [r.get("sse", 0.0) for r in per_seed_results]
+        eps_to_best = [r.get("episodes_to_best", 0) for r in per_seed_results]
+        acts_to_best = [r.get("actions_to_best", 0) for r in per_seed_results]
+        t_envs = [r.get("time_env", 0.0) for r in per_seed_results]
+        t_agents = [r.get("time_agent", 0.0) for r in per_seed_results]
 
         agg = per_seed_results[0].copy()
         agg["val_cr"] = float(np.mean(crs))
@@ -869,6 +1144,16 @@ def run_multi_seed_experiment(
         agg["n_seeds"] = len(seeds)
         agg["per_seed_crs"] = crs
         agg["per_seed_cuts"] = cuts
+        # SSE
+        agg["sse"] = float(np.mean(sses))
+        agg["sse_std"] = float(np.std(sses))
+        agg["per_seed_sses"] = sses
+        # Sample efficiency
+        agg["episodes_to_best"] = float(np.mean(eps_to_best))
+        agg["actions_to_best"] = float(np.mean(acts_to_best))
+        # Timing breakdown (means across seeds)
+        agg["time_env"] = float(np.mean(t_envs))
+        agg["time_agent"] = float(np.mean(t_agents))
         if qms:
             agg["q_margins"] = [float(np.mean(qms))]
             agg["q_margin_std"] = float(np.std(qms))
@@ -1192,6 +1477,7 @@ EXPERIMENT_REGISTRY = {
     "E6": "Version Progression",
     "S1": "Scalability Timing",
     "AB1": "Entanglement Ablation (no-CNOT vs linear)",
+    "RA1": "Reward Ablation (naive vs shaped)",
 }
 
 
@@ -1412,6 +1698,13 @@ def main():
                     ab1_results.append(r)
                 all_results["AB1"] = ab1_results
                 print_summary_table(ab1_results, "AB1: Entanglement Ablation")
+
+        # ── RA1: Reward Ablation ─────────────────────────────────
+        if "RA1" in selected:
+            ra1_result = run_ra1_reward_ablation(
+                args.traj_path, args.centers_path,
+                min(args.amount, 30), args.epochs, args.seed)
+            all_results["RA1"] = ra1_result
 
         # ── Grand summary ────────────────────────────────────────
         print(f"\n{'═'*70}")

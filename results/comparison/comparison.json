@@ -1,0 +1,182 @@
+{
+  "timestamp": "2026-02-24T20:44:26.874022",
+  "models": [
+    {
+      "label": "RLSTCcode (best, 3k)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.5891774235,
+      "training_data": 3000,
+      "optimizer": "SGD",
+      "detail": "best data-size"
+    },
+    {
+      "label": "RLSTCcode (5-fold CV)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.7543383237,
+      "val_cr_std": 0.0368514954,
+      "training_data": 4000,
+      "optimizer": "SGD",
+      "detail": "5-fold CV mean"
+    },
+    {
+      "label": "RLSTCcode (1k)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.7386836329,
+      "training_data": 1000,
+      "optimizer": "SGD",
+      "detail": "data-size"
+    },
+    {
+      "label": "RLSTCcode (2k)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.6696299475,
+      "training_data": 2000,
+      "optimizer": "SGD",
+      "detail": "data-size"
+    },
+    {
+      "label": "RLSTCcode (3k)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.5891774235,
+      "training_data": 3000,
+      "optimizer": "SGD",
+      "detail": "data-size"
+    },
+    {
+      "label": "RLSTCcode (4k)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.605936325,
+      "training_data": 4000,
+      "optimizer": "SGD",
+      "detail": "data-size"
+    },
+    {
+      "label": "RLSTCcode (5k)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.6709888949,
+      "training_data": 5000,
+      "optimizer": "SGD",
+      "detail": "data-size"
+    },
+    {
+      "label": "RLSTCcode (k=5)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.6208912824,
+      "training_data": "varies",
+      "optimizer": "SGD",
+      "detail": "cluster-count"
+    },
+    {
+      "label": "RLSTCcode (k=8)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.7272835017,
+      "training_data": "varies",
+      "optimizer": "SGD",
+      "detail": "cluster-count"
+    },
+    {
+      "label": "RLSTCcode (k=12)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.8174934425,
+      "training_data": "varies",
+      "optimizer": "SGD",
+      "detail": "cluster-count"
+    },
+    {
+      "label": "RLSTCcode (k=14)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 0.8205582301,
+      "training_data": "varies",
+      "optimizer": "SGD",
+      "detail": "cluster-count"
+    },
+    {
+      "label": "VQ-DQN (5q\u00d73L)",
+      "system": "Q-RLSTC",
+      "kind": "quantum",
+      "params": 34,
+      "val_cr": 1.4811480124827257,
+      "cut_pct": 33.165829145728644,
+      "n_segs": 465,
+      "wall_time": 987.1743488311768,
+      "q_margin": -0.27213852379892156,
+      "training_data": 30,
+      "optimizer": "SPSA",
+      "detail": "E1"
+    },
+    {
+      "label": "Control A (linear)",
+      "system": "Q-RLSTC",
+      "kind": "classical",
+      "params": 12,
+      "val_cr": 9.205147834537682,
+      "cut_pct": 0.0,
+      "n_segs": 3,
+      "wall_time": 8.729130983352661,
+      "q_margin": 0.2277227599816154,
+      "training_data": 30,
+      "optimizer": "SPSA",
+      "detail": "E1"
+    },
+    {
+      "label": "Control B (h=64)",
+      "system": "Q-RLSTC",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 5.113332998782258,
+      "cut_pct": 0.21536252692031588,
+      "n_segs": 6,
+      "wall_time": 9.235500812530518,
+      "q_margin": 0.24386864242378536,
+      "training_data": 30,
+      "optimizer": "SPSA",
+      "detail": "E1"
+    },
+    {
+      "label": "Control C (h=32\u00d732)",
+      "system": "Q-RLSTC",
+      "kind": "classical",
+      "params": 1314,
+      "val_cr": 1.639022586290659,
+      "cut_pct": 3.8765254845656854,
+      "n_segs": 57,
+      "wall_time": 9.993803977966309,
+      "q_margin": 0.061042589098715794,
+      "training_data": 30,
+      "optimizer": "SPSA",
+      "detail": "E1"
+    },
+    {
+      "label": "RLSTCcode (modelstate4)",
+      "system": "RLSTCcode",
+      "kind": "classical",
+      "params": 514,
+      "val_cr": 1.5452601019,
+      "training_data": "unknown",
+      "optimizer": "SGD",
+      "detail": "other"
+    }
+  ]
+}
