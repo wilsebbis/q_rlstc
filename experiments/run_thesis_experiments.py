@@ -127,7 +127,67 @@ PROTOCOL = {
     "COMPLEXITY_LAMBDA": 0.03,
     "MIN_CUT_BONUS": 0.15,       # bonus for first CUT in episode (anti-collapse)
     "COLLAPSE_CUT_THRESHOLD": 1.0,  # CUT% below this → collapsed
+    # Fix 2: Adaptive Lagrangian cut budget
+    "USE_LAGRANGIAN": True,        # enable adaptive CUT penalty
+    "TARGET_CUT_PCT": 10.0,        # target CUT rate (%)
+    "LAGRANGIAN_LR": 0.02,         # dual variable learning rate (increased for stiffer response)
+    "LAMBDA_MAX": 2.0,             # cap to prevent runaway
+    "LAMBDA_BLEND_GREEDY": 0.7,    # weight on GreedyCUT% vs TrainCUT%
+    # Fix 4: Faster epsilon for small data
+    "EPSILON_DECAY_MODE": "per_step",   # "per_episode" or "per_step"
+    "EPSILON_DECAY_PER_STEP": 0.9995,   # ε≈0.1 after ~4600 steps
+    # Fix 4b: Forced-cut curriculum
+    "FORCED_CUT_PROB": 0.15,       # probability of forced CUT override in early epochs
+    "FORCED_CUT_EPOCHS": 1,        # only force in first N epochs
+    # Fix 2b: Action-stratified replay
+    "USE_STRATIFIED_REPLAY": True,  # enable action-stratified replay
+    "MIN_CUT_QUOTA": 0.3,           # minimum CUT fraction per batch
+    # Fix 3: Boltzmann exploration
+    "EXPLORATION_MODE": "boltzmann",   # "epsilon_greedy" or "boltzmann"
+    "BOLTZMANN_TEMP_START": 1.0,
+    "BOLTZMANN_TEMP_MIN": 0.1,
+    "BOLTZMANN_TEMP_DECAY": 0.99,
+    # Fix 4c: Optimistic CUT bias
+    "OPTIMISTIC_CUT_BIAS": 0.5,
+    # Fix 5: Q-clip range
+    "Q_CLIP_RANGE": 50.0,
 }
+
+
+METRIC_DEFINITIONS = """
+## Metric Definitions
+- **ValCR (Validation Competitive Ratio)**: OD_segmented / OD_baseline.
+  Numerator: RMS distance from each point to its segment centroid (post-segmentation).
+  Denominator (bs): RMS distance under the always-extend baseline on the SAME
+  validation fold. Lower is better. <1.0 means segmentation improves clustering.
+  NOTE: This is NOT the standard online-algorithms competitive ratio.
+  ⚠ CR values are ONLY comparable when computed with IDENTICAL bs.
+- **GreedyCUT%**: Fraction of validation timesteps where the greedy policy
+  (ε=0, no exploration) selects CUT (action=1) AFTER L_MIN override.
+  Numerator: count of effective CUT actions in validation.
+  Denominator: total validation timesteps (CUT + EXTEND).
+- **TrainCUT%**: Fraction of training actions that were CUT, INCLUDING
+  exploration (ε-greedy) actions. Higher early due to random exploration.
+- **BufCUT%**: CUT action fraction IN THE REPLAY BUFFER. May lag behind
+  current policy because buffer contains old experience.
+- **#segs (total)**: Total segments across ALL validation trajectories.
+  Each trajectory produces at least 1 segment (the terminal segment).
+  #segs = Σ_episodes (cuts_in_episode + 1).
+- **segs/traj**: Average segments per validation trajectory = #segs / n_val_trajectories.
+- **Silhouette Coefficient**: Standard cluster validity metric [-1, 1].
+  Higher is better. Measures intra-cluster vs inter-cluster distance.
+- **SSE**: Sum of squared errors from cluster centroids.
+- **Q-margin**: Mean(Q_extend - Q_cut) across validation steps. Positive
+  means the agent prefers extending; negative means it prefers cutting.
+- **OD (Overall Distance)**: RMS distance from each point to its segment centroid.
+- **bs (basesim)**: OD under the always-extend (no-segmentation) baseline for the
+  same validation fold. Used as the denominator of ValCR.
+  ⚠ If bs differs between two runs, their CR values are on different scales.
+- **L_MIN override**: When the agent selects CUT but the current segment is
+  shorter than L_MIN (={L_MIN}) points, OR the remaining trajectory is shorter
+  than L_MIN, the environment SILENTLY overrides CUT → EXTEND. The logged
+  action is the POST-override (effective) action.
+""".format(L_MIN=3)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -163,6 +223,12 @@ def build_agent(spec: ModelSpec, seed: int):
             shots=spec.shots,
             target_update_freq=PROTOCOL["target_update_freq"],
             entanglement=spec.entanglement,
+            exploration_mode=PROTOCOL.get("EXPLORATION_MODE", "epsilon_greedy"),
+            boltzmann_temp=PROTOCOL.get("BOLTZMANN_TEMP_START", 1.0),
+            boltzmann_temp_min=PROTOCOL.get("BOLTZMANN_TEMP_MIN", 0.1),
+            boltzmann_temp_decay=PROTOCOL.get("BOLTZMANN_TEMP_DECAY", 0.99),
+            q_clip_range=PROTOCOL.get("Q_CLIP_RANGE", 50.0),
+            optimistic_cut_bias=PROTOCOL.get("OPTIMISTIC_CUT_BIAS", 0.0),
         )
         backend = None
         if spec.noise_model != "ideal":
@@ -284,6 +350,27 @@ def train_and_evaluate(
     MIN_CUT_BONUS = PROTOCOL["MIN_CUT_BONUS"]
     batch_size = PROTOCOL["batch_size"]
 
+    # Fix 2: Adaptive Lagrangian cut penalty
+    use_lagrangian = PROTOCOL.get("USE_LAGRANGIAN", False)
+    lagrangian_lambda = CUT_PENALTY  # initialize from static value
+    target_cut_pct = PROTOCOL.get("TARGET_CUT_PCT", 10.0)
+    lagrangian_lr = PROTOCOL.get("LAGRANGIAN_LR", 0.02)
+    lambda_max = PROTOCOL.get("LAMBDA_MAX", 2.0)
+    lambda_blend_greedy = PROTOCOL.get("LAMBDA_BLEND_GREEDY", 0.7)
+    lagrangian_history = []  # track λ over epochs
+
+    # Fix 2b: Action-stratified replay
+    use_stratified = PROTOCOL.get("USE_STRATIFIED_REPLAY", True)
+    min_cut_quota = PROTOCOL.get("MIN_CUT_QUOTA", 0.3)
+
+    # Fix 4b: Forced-cut curriculum
+    forced_cut_prob = PROTOCOL.get("FORCED_CUT_PROB", 0.15)
+    forced_cut_epochs = PROTOCOL.get("FORCED_CUT_EPOCHS", 1)
+
+    # Fix 4: Epsilon decay mode
+    eps_mode = PROTOCOL.get("EPSILON_DECAY_MODE", "per_episode")
+    eps_per_step = PROTOCOL.get("EPSILON_DECAY_PER_STEP", 0.9995)
+
     # Tracking
     all_rewards = []
     val_crs, val_cut_pcts, val_seg_counts = [], [], []
@@ -291,32 +378,57 @@ def train_and_evaluate(
     val_basesims = []       # basesim per epoch (denominator of CR)
     val_cr_medians = []     # Median per-trajectory CR per epoch
     val_sses = []           # SSE per epoch
+    val_silhouettes = []    # Silhouette coefficient per epoch
     q_margins = []          # D2: mean(Q_extend - Q_cut) per epoch (all val steps)
     replay_cut_pcts = []    # D3: CUT ratio in training actions per epoch
     replay_buf_cut_pcts = []  # D5: CUT ratio in actual replay buffer
+    # Fix 6: ΔQ distribution logging
+    delta_q_train_stats = []  # per-epoch ΔQ stats from training
+    delta_q_val_stats = []    # per-epoch ΔQ stats from validation
     best_bundle = {"val_cr": float("inf"), "cut_pct": 0.0,
-                   "n_segs": 0, "epoch": -1, "avg_reward": 0.0, "sse": 0.0}
+                   "n_segs": 0, "epoch": -1, "avg_reward": 0.0, "sse": 0.0,
+                   "silhouette": 0.0}
     # Sample efficiency: total episodes and actions processed
     total_episodes = 0
     total_actions = 0
     # Timing breakdown
     time_env = 0.0    # environment step time
     time_agent = 0.0  # agent act + update time
+    has_q = hasattr(agent, 'get_q_values')  # check once, used in train + eval
 
     start_time = time.time()
 
-    print(f"\n{'─'*55}")
-    print(f"  {spec.name}  ({agent.n_params} params)")
-    print(f"  Noise: {spec.noise_model} | Shots: {spec.shots}")
-    print(f"  Mode: {spec.run_type} | Data: {spec.data_fraction:.0%}")
-    print(f"  Epochs: {n_epochs} × {scheduler.active_training_size} trajectories")
-    print(f"{'─'*55}")
+    print(f"\n{'─'*70}")
+    # Determine optimizer name for legend
+    opt_name = {"quantum": "SPSA", "classical": "SPSA",
+                "adam": "Adam", "original": "SGD"}.get(spec.kind, spec.kind)
+    q_info = ""
+    if spec.kind == "quantum":
+        q_info = (f" | {spec.n_qubits}q×{spec.n_layers}L "
+                  f"{spec.entanglement} | {spec.noise_model} | shots={spec.shots}")
+    legend = (f"{spec.name} — {opt_name} — {agent.n_params}p"
+              f" — {n_trajectories}traj/{n_epochs}ep/seed={seed}{q_info}")
+    print(f"  {legend}")
+    cut_pen_str = 'λ-adaptive' if use_lagrangian else f'{CUT_PENALTY:.4f}'
+    print(f"  Reward weights: CUT_PEN={cut_pen_str}"
+          f" EXTEND_COST={EXTEND_COST} MIN_CUT_BONUS={MIN_CUT_BONUS}"
+          f" COMPLEXITY_λ={COMPLEXITY_LAMBDA}")
+    if use_lagrangian:
+        print(f"  Lagrangian: target={target_cut_pct:.0f}% lr={lagrangian_lr} λ_init={CUT_PENALTY}")
+    print(f"  Epsilon: mode={eps_mode}"
+          f" {'decay/step='+str(eps_per_step) if eps_mode == 'per_step' else 'decay/ep='+str(PROTOCOL['epsilon_decay'])}")
+    print(f"  bs (fold baseline OD) = {fold_basesim:.6f}")
+    print(f"  Epochs: {n_epochs} × {scheduler.active_training_size} trajectories"
+          f" | val={eidx-sidx} trajectories")
+    print(f"{'─'*70}")
 
     for epoch in range(n_epochs):
         idxlist = scheduler.sample_epoch()
         epoch_rewards = []
         epoch_cuts_in_training = 0
         epoch_extends_in_training = 0
+        epoch_forced_cuts = 0
+        epoch_delta_q_train = []  # Fix 6: ΔQ per training step
         epoch_start = time.time()
         _last_tick = epoch_start
 
@@ -342,7 +454,22 @@ def train_and_evaluate(
             for index in range(1, steps):
                 done = (index == steps - 1)
                 t_act = time.time()
+
+                # Fix 6: Log ΔQ during training
+                if has_q:
+                    _tq = agent.get_q_values(observation.flatten())
+                    epoch_delta_q_train.append(float(_tq[1] - _tq[0]))  # Q_cut - Q_ext
+
                 action = agent.act(observation)
+
+                # Fix 4b: Forced-cut curriculum
+                if (epoch < forced_cut_epochs
+                    and n_cuts == 0
+                    and n_steps >= L_MIN
+                    and np.random.random() < forced_cut_prob):
+                    action = 1  # force CUT
+                    epoch_forced_cuts += 1
+
                 time_agent += time.time() - t_act
 
                 t_env = time.time()
@@ -357,6 +484,9 @@ def train_and_evaluate(
 
                 reward = scale_reward(reward)
 
+                # Use adaptive λ if Lagrangian enabled, else static penalty
+                active_cut_pen = lagrangian_lambda if use_lagrangian else CUT_PENALTY
+
                 if actual_action == 0:
                     reward -= EXTEND_COST
                     epoch_extends_in_training += 1
@@ -364,7 +494,7 @@ def train_and_evaluate(
                     # Anti-collapse: bonus for first CUT in episode
                     if n_cuts == 0:
                         reward += MIN_CUT_BONUS
-                    reward -= CUT_PENALTY
+                    reward -= active_cut_pen
                     n_cuts += 1
                     epoch_cuts_in_training += 1
                 n_steps += 1
@@ -380,11 +510,23 @@ def train_and_evaluate(
                     break
 
                 if replay.is_ready(batch_size):
-                    states, actions, rewards_b, next_states, dones = \
-                        replay.sample_batch(batch_size)
+                    # Fix 2b: Action-stratified replay
+                    if use_stratified:
+                        states, actions, rewards_b, next_states, dones = \
+                            replay.sample_batch_stratified(batch_size, min_cut_quota)
+                    else:
+                        states, actions, rewards_b, next_states, dones = \
+                            replay.sample_batch(batch_size)
                     t_upd = time.time()
                     agent.update(states, actions, rewards_b, next_states, dones)
                     time_agent += time.time() - t_upd
+
+                # Fix 4: Per-step epsilon decay for small-data regimes
+                if eps_mode == "per_step":
+                    agent.epsilon = max(
+                        agent.config.epsilon_min,
+                        agent.epsilon * eps_per_step
+                    )
 
                 observation = observation_
 
@@ -395,7 +537,8 @@ def train_and_evaluate(
 
             all_rewards.append(episode_reward)
             epoch_rewards.append(episode_reward)
-            agent.decay_epsilon()
+            if eps_mode == "per_episode":
+                agent.decay_epsilon()
 
         # ── End-of-epoch validation (SINGLE PASS — fixed) ──────
         # Collects: cut/extend counts, per-episode segs, Q-margins
@@ -403,7 +546,6 @@ def train_and_evaluate(
         val_n_extend, val_n_cut = 0, 0
         val_segs = 0
         q_extend_vals, q_cut_vals = [], []
-        has_q = hasattr(agent, 'get_q_values')
 
         for e in range(sidx, eidx):
             obs, s = env.reset(e, "E")
@@ -456,6 +598,27 @@ def train_and_evaluate(
             val_sse = float('inf')
         val_sses.append(val_sse)
 
+        # Silhouette coefficient — compute from segment data
+        try:
+            from q_rlstc.clustering.metrics import silhouette_score as sil_score
+            seg_data = []
+            seg_labels = []
+            for cid, cdata in env.clusters_E.items():
+                subtrajs = cdata[3] if len(cdata) > 3 else {}
+                for tid, points in (subtrajs.items() if isinstance(subtrajs, dict) else []):
+                    for pt in points:
+                        seg_data.append(pt)
+                        seg_labels.append(cid)
+            if len(seg_data) >= 2 and len(set(seg_labels)) >= 2:
+                seg_data_arr = np.array(seg_data)
+                seg_labels_arr = np.array(seg_labels)
+                val_sil = float(sil_score(seg_data_arr, seg_labels_arr))
+            else:
+                val_sil = 0.0
+        except Exception:
+            val_sil = 0.0
+        val_silhouettes.append(val_sil)
+
         val_total = val_n_extend + val_n_cut
         cut_pct = 100 * val_n_cut / val_total if val_total else 0
         val_cut_pcts.append(cut_pct)
@@ -465,8 +628,33 @@ def train_and_evaluate(
         if q_extend_vals:
             margin = float(np.mean(q_extend_vals) - np.mean(q_cut_vals))
             q_margins.append(margin)
+            # Fix 6: ΔQ distribution from validation (Q_cut - Q_ext)
+            dq_val = np.array(q_cut_vals) - np.array(q_extend_vals)
+            delta_q_val_stats.append({
+                "mean": float(np.mean(dq_val)),
+                "median": float(np.median(dq_val)),
+                "std": float(np.std(dq_val)),
+                "min": float(np.min(dq_val)),
+                "max": float(np.max(dq_val)),
+                "pct_positive": float(100 * np.mean(dq_val > 0)),
+            })
         else:
             q_margins.append(0.0)
+            delta_q_val_stats.append({})
+
+        # Fix 6: ΔQ distribution from training
+        if epoch_delta_q_train:
+            dq_t = np.array(epoch_delta_q_train)
+            delta_q_train_stats.append({
+                "mean": float(np.mean(dq_t)),
+                "median": float(np.median(dq_t)),
+                "std": float(np.std(dq_t)),
+                "min": float(np.min(dq_t)),
+                "max": float(np.max(dq_t)),
+                "pct_positive": float(100 * np.mean(dq_t > 0)),
+            })
+        else:
+            delta_q_train_stats.append({})
 
         # D3: Replay distribution — training actions this epoch
         total_training_actions = epoch_cuts_in_training + epoch_extends_in_training
@@ -494,6 +682,7 @@ def train_and_evaluate(
                 "n_segs": val_segs, "epoch": epoch + 1,
                 "avg_reward": float(np.mean(epoch_rewards)),
                 "sse": val_sse,
+                "silhouette": val_sil,
                 "episodes_to_best": total_episodes,
                 "actions_to_best": total_actions,
             }
@@ -504,16 +693,33 @@ def train_and_evaluate(
             q_diag = (f" | Q̄ext={np.mean(q_extend_vals):+.3f}"
                       f" Q̄cut={np.mean(q_cut_vals):+.3f}")
 
+        # Compute segments per trajectory for clarity
+        n_val_episodes = eidx - sidx
+        segs_per_traj = val_segs / max(n_val_episodes, 1)
+
+        # Fix 6: ΔQ inline stats
+        dq_val_str = ""
+        if delta_q_val_stats[-1]:
+            ds = delta_q_val_stats[-1]
+            dq_val_str = f" | ΔQval={ds['mean']:+.3f}±{ds['std']:.3f}({ds['pct_positive']:.0f}%>0)"
+        dq_train_str = ""
+        if delta_q_train_stats[-1]:
+            ds = delta_q_train_stats[-1]
+            dq_train_str = f" | ΔQtrn={ds['mean']:+.3f}±{ds['std']:.3f}"
+        forced_str = f" | forced={epoch_forced_cuts}" if epoch_forced_cuts > 0 else ""
+
         print(f"  Epoch {epoch+1:2d}/{n_epochs}: "
               f"ValCR={val_cr:.4f} (OD={val_od:.4f}/bs={val_basesim:.4f}) "
               f"medCR={val_cr_median:.4f} | "
+              f"Sil={val_sil:+.3f} | "
               f"R̄={np.mean(epoch_rewards):+.3f} | "
-              f"CUT={cut_pct:.0f}% | "
-              f"#segs={val_segs} | "
+              f"GreedyCUT={cut_pct:.0f}% | "
+              f"#segs={val_segs}({segs_per_traj:.1f}/traj) | "
               f"ε={agent.epsilon:.3f} | "
               f"Qmargin={q_margins[-1]:+.4f} | "
-              f"ReplayCUT={rp_cut_pct:.0f}% | "
-              f"BufCUT={buf_cut_pct:.0f}%{improved}{q_diag}")
+              f"TrainCUT={rp_cut_pct:.0f}% | "
+              f"BufCUT={buf_cut_pct:.0f}%{improved}{q_diag}"
+              f"{dq_val_str}{dq_train_str}{forced_str}")
 
         # Reset eval clusters
         for i in env.clusters_E.keys():
@@ -523,6 +729,22 @@ def train_and_evaluate(
 
         env.update_cluster("T")
         scheduler.update()
+
+        # Fix 1: Lagrangian update — drive λ from GreedyCUT%, not TrainCUT%
+        if use_lagrangian:
+            epoch_total = epoch_cuts_in_training + epoch_extends_in_training
+            behavior_rate = (100.0 * epoch_cuts_in_training / max(epoch_total, 1))
+            greedy_rate = cut_pct  # already computed from validation loop above
+            # Blend: primarily greedy, with behavior smoothing
+            effective_rate = lambda_blend_greedy * greedy_rate + (1 - lambda_blend_greedy) * behavior_rate
+            lambda_before = lagrangian_lambda
+            lagrangian_lambda = max(0.0, min(lambda_max,
+                lagrangian_lambda + lagrangian_lr * (effective_rate - target_cut_pct)))
+            delta_lambda = lagrangian_lambda - lambda_before
+            lagrangian_history.append(lagrangian_lambda)
+            print(f"    λ_before={lambda_before:.4f} → λ_after={lagrangian_lambda:.4f} | "
+                  f"greedy={greedy_rate:.1f}% train={behavior_rate:.1f}% "
+                  f"target={target_cut_pct:.0f}% Δλ={delta_lambda:+.4f}")
 
     elapsed = time.time() - start_time
 
@@ -540,15 +762,29 @@ def train_and_evaluate(
         "run_type": spec.run_type,
         "data_fraction": spec.data_fraction,
         "collapsed": is_collapsed,
+        # Configuration metadata (advisor item #5)
+        "config": {
+            "n_qubits": spec.n_qubits,
+            "n_layers": spec.n_layers,
+            "shots": spec.shots,
+            "entanglement": spec.entanglement,
+            "noise_model": spec.noise_model,
+            "version": getattr(agent, 'version', 'N/A'),
+            "protocol": dict(PROTOCOL),
+            "env_metadata": _collect_env_metadata(),
+        },
         # Best-epoch bundle
         "val_cr": best_bundle["val_cr"],
         "val_od": best_bundle.get("val_od", 0.0),
         "val_basesim": best_bundle.get("val_basesim", 0.0),
         "val_cr_median": best_bundle.get("val_cr_median", 0.0),
-        "cut_pct": best_bundle["cut_pct"],
-        "n_segs": best_bundle["n_segs"],
+        "cut_pct": best_bundle["cut_pct"],  # GreedyCUT% (validation, post-L_MIN override)
+        "n_segs": best_bundle["n_segs"],    # total segments across all val trajectories
+        "n_val_episodes": eidx - sidx,       # number of validation trajectories
+        "segs_per_traj": best_bundle["n_segs"] / max(eidx - sidx, 1),
         "best_epoch": best_bundle["epoch"],
         "sse": best_bundle.get("sse", 0.0),
+        "silhouette": best_bundle.get("silhouette", 0.0),
         # Sample efficiency
         "episodes_to_best": best_bundle.get("episodes_to_best", total_episodes),
         "actions_to_best": best_bundle.get("actions_to_best", total_actions),
@@ -559,6 +795,7 @@ def train_and_evaluate(
         "final_cut_pct": val_cut_pcts[-1] if val_cut_pcts else 0.0,
         "final_n_segs": val_seg_counts[-1] if val_seg_counts else 0,
         "final_sse": val_sses[-1] if val_sses else 0.0,
+        "final_silhouette": val_silhouettes[-1] if val_silhouettes else 0.0,
         # Per-epoch series
         "val_crs": val_crs,
         "val_ods": val_ods,
@@ -567,10 +804,17 @@ def train_and_evaluate(
         "val_cut_pcts": val_cut_pcts,
         "val_seg_counts": val_seg_counts,
         "val_sses": val_sses,
+        "val_silhouettes": val_silhouettes,
         "q_margins": q_margins,
         "replay_cut_pcts": replay_cut_pcts,
         "replay_buf_cut_pcts": replay_buf_cut_pcts,
         "all_rewards": [float(r) for r in all_rewards],
+        # Lagrangian tracking
+        "lagrangian_history": [float(l) for l in lagrangian_history],
+        "final_lagrangian_lambda": float(lagrangian_lambda) if use_lagrangian else None,
+        # Fix 6: ΔQ stats
+        "delta_q_train_stats": delta_q_train_stats,
+        "delta_q_val_stats": delta_q_val_stats,
         # Timing breakdown
         "wall_time": elapsed,
         "time_env": time_env,
@@ -598,6 +842,8 @@ def get_e1_specs():
         ModelSpec("Control D (Adam linear)",  "adam", hidden_sizes=[]),
         ModelSpec("Control E (Adam h=64)",    "adam", hidden_sizes=[64]),
         ModelSpec("Control F (Adam h=32×32)", "adam", hidden_sizes=[32, 32]),
+        # Original RLSTC baseline (advisor item #10 — segmentation stats)
+        ModelSpec("Original RLSTC (h=64)", "original"),
     ]
 
 def get_e2_specs():
@@ -637,6 +883,39 @@ def get_e6_specs():
     """E6 — Version Progression."""
     return [
         ModelSpec("VQ-DQN D (5q×3L)", "quantum", n_qubits=5, n_layers=3),
+    ]
+
+
+def get_e7_specs():
+    """E7 — Configuration Sweep (advisor item #1: model capacity study).
+
+    Varies qubits, layers, and ansatz type to study expressivity vs
+    barren plateau tradeoff. All combinations use shots=0 (statevector).
+    """
+    specs = []
+    for n_qubits in [4, 5, 6, 7, 8]:
+        for n_layers in [2, 3, 4, 5]:
+            for entanglement in ["linear", "circular", "full"]:
+                name = f"VQ-DQN ({n_qubits}q×{n_layers}L {entanglement})"
+                specs.append(ModelSpec(
+                    name, "quantum",
+                    n_qubits=n_qubits, n_layers=n_layers,
+                    entanglement=entanglement,
+                ))
+    return specs
+
+
+def get_e8_specs(n_traj: int):
+    """E8 — Data Scaling (Fix 6: sample efficiency comparison).
+
+    Compares VQ-DQN vs best classical at a specific trajectory count.
+    Called multiple times with different n_traj values.
+    """
+    return [
+        ModelSpec(f"VQ-DQN ({n_traj}t)",        "quantum",   n_layers=3),
+        ModelSpec(f"Original RLSTC ({n_traj}t)", "original"),
+        ModelSpec(f"Control B ({n_traj}t)",      "classical", hidden_sizes=[64]),
+        ModelSpec(f"MLP-34 Adam ({n_traj}t)",    "adam",      hidden_sizes=[4]),
     ]
 
 
@@ -1083,29 +1362,42 @@ def run_s1_scalability(traj_path, centers_path, seed=42):
 
 def print_summary_table(all_results: List[Dict], experiment: str):
     """Print a formatted summary table for an experiment's results."""
-    print(f"\n{'═'*90}")
+    print(f"\n{'═'*120}")
     print(f"  {experiment} — Summary")
-    print(f"{'═'*90}\n")
+    print(f"{'═'*120}\n")
 
     header = (f"{'Model':<30s} {'Params':>6s} {'ValCR':>8s} "
-              f"{'CUT%':>6s} {'#Segs':>6s} {'BestEp':>6s} "
+              f"{'OD':>8s} {'bs':>8s} "
+              f"{'CUT%':>6s} {'#Segs':>6s} {'Sil':>6s} {'BestEp':>6s} "
               f"{'Time':>7s} {'Qmargin':>8s}")
     print(header)
-    print("─" * 90)
+    print("─" * 120)
 
     for r in all_results:
         qm = r.get("q_margins", [])
         qm_str = f"{qm[-1]:+.4f}" if qm else "N/A"
+        od_val = r.get("val_od", 0.0)
+        bs_val = r.get("val_basesim", 0.0)
+        sil_val = r.get("silhouette", r.get("final_silhouette", 0.0))
         print(f"{r['model']:<30s} "
               f"{r['params']:>6d} "
               f"{r['val_cr']:>8.4f} "
+              f"{od_val:>8.4f} "
+              f"{bs_val:>8.4f} "
               f"{r['cut_pct']:>5.0f}% "
               f"{r['n_segs']:>6d} "
+              f"{sil_val:>+6.3f} "
               f"{r.get('best_epoch', 0):>6d} "
               f"{r['wall_time']:>6.1f}s "
               f"{qm_str:>8s}")
 
-    print("─" * 90)
+    print("─" * 120)
+
+    # Baseline integrity check: warn if bs varies across models
+    bs_values = [r.get("val_basesim", 0.0) for r in all_results if r.get("val_basesim", 0.0) > 0]
+    if bs_values and (max(bs_values) - min(bs_values)) > 0.001:
+        print(f"  ⚠ BASELINE INCONSISTENCY: bs ranges from {min(bs_values):.4f} to "
+              f"{max(bs_values):.4f} — CR values may not be directly comparable")
 
 
 def run_multi_seed_experiment(
@@ -1271,6 +1563,58 @@ def print_pareto_table(d1_results, agent_results: List[Dict]):
     print("─" * 80)
 
 
+def print_constrained_leaderboard(agent_results: List[Dict], d1_results=None):
+    """Print CUT-constrained leaderboard — primary thesis result table.
+
+    For each CUT% threshold, shows the best model. This is the
+    degeneracy-immune evaluation the committee needs to see.
+    """
+    thresholds = [5, 10, 20]
+    print(f"\n{'═'*100}")
+    print("  CONSTRAINED LEADERBOARD: Best model at CUT% ≤ threshold")
+    print("  (Immunizes against 'you just cut more' critique)")
+    print(f"{'═'*100}\n")
+
+    print("  Because CR decreases sharply with segmentation rate even for random")
+    print("  policies (D1), all results are interpreted jointly with CUT%/#segs")
+    print("  and relative to the random-cut envelope.\n")
+
+    header = (f"{'CUT ≤':<8s} {'Best Model':<30s} {'ValCR':>8s} "
+              f"{'CUT%':>6s} {'#Segs':>6s} {'OD':>8s} {'bs':>8s} "
+              f"{'Sil':>6s} {'Regime':<10s}")
+    print(header)
+    print("─" * 100)
+
+    for thresh in thresholds:
+        eligible = [r for r in agent_results if r.get("cut_pct", 100) <= thresh]
+        if not eligible:
+            print(f"{'≤'+str(thresh)+'%':<8s} {'(no model qualifies)':<30s}")
+            continue
+        best = min(eligible, key=lambda r: r["val_cr"])
+        regime = "SPSA" if best.get("kind") in ("quantum", "classical") else "SGD/Adam"
+        sil = best.get("silhouette", best.get("final_silhouette", 0.0))
+        print(f"{'≤'+str(thresh)+'%':<8s} {best['model']:<30s} "
+              f"{best['val_cr']:>8.4f} "
+              f"{best['cut_pct']:>5.0f}% "
+              f"{best['n_segs']:>6d} "
+              f"{best.get('val_od', 0.0):>8.4f} "
+              f"{best.get('val_basesim', 0.0):>8.4f} "
+              f"{sil:>+6.3f} "
+              f"{regime:<10s}")
+
+        # Also show random baseline at same constraint (if D1 available)
+        if d1_results:
+            d1r = d1_results.get("results", [])
+            d1_valid = [r for r in d1r if r.get("cut_prob", 1.0) * 100 <= thresh]
+            if d1_valid:
+                d1_best = min(d1_valid, key=lambda r: r["val_cr"])
+                print(f"{'':>8s} {'  └─ Random baseline':<30s} "
+                      f"{d1_best['val_cr']:>8.4f} "
+                      f"{d1_best['cut_prob']*100:>5.0f}% ")
+
+    print("─" * 100)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Plot generation
 # ═══════════════════════════════════════════════════════════════════════
@@ -1312,7 +1656,13 @@ def generate_plots(all_experiment_results: Dict, plot_dir: Path):
                         xytext=(0, 8), ha="center", fontsize=8)
         ax.set_xlabel("CUT Probability (%)")
         ax.set_ylabel("ValCR (lower = better)")
-        ax.set_title("D1: ValCR vs CUT% (Random Policy)")
+        # Extract bs from D1 results for subtitle
+        d1_bs = d1.get("fold_basesim", "")
+        if not d1_bs and d1.get("results"):
+            # Try to extract from first result
+            d1_bs = d1["results"][0].get("fold_basesim", "")
+        bs_str = f" (bs={d1_bs:.4f})" if isinstance(d1_bs, (int, float)) else ""
+        ax.set_title(f"D1: ValCR vs CUT% (Random Policy){bs_str}")
         fig.tight_layout()
         fig.savefig(str(plot_dir / "d1_valcr_vs_cut.png"), dpi=150)
         plt.close(fig)
@@ -1363,7 +1713,12 @@ def generate_plots(all_experiment_results: Dict, plot_dir: Path):
                         fontsize=7, color=c)
         ax.set_xlabel("CUT% (segmentation rate)")
         ax.set_ylabel("ValCR (lower = better)")
-        ax.set_title("Pareto Frontier: Learned Agents vs Random Baseline")
+        # Add CUT% constraint lines
+        for thresh, ls in [(5, ':'), (10, '--'), (20, '-.')]:
+            ax.axvline(x=thresh, color='#999999', linestyle=ls, alpha=0.4,
+                       label=f'CUT≤{thresh}%')
+        ax.set_title("Pareto Frontier: Learned Agents vs Random Baseline\n"
+                     "(CR decreases with CUT% even for random — evaluate jointly)")
         ax.legend(fontsize=7, loc="upper right")
         fig.tight_layout()
         fig.savefig(str(plot_dir / "pareto_valcr_vs_cut.png"), dpi=150)
@@ -1450,7 +1805,10 @@ def generate_plots(all_experiment_results: Dict, plot_dir: Path):
             ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
                     f"{cr:.3f}", ha="center", fontsize=8)
         ax.set_ylabel("ValCR (lower = better)")
-        ax.set_title(f"{exp_name}: Validation CR Comparison")
+        # Add bs to subtitle from first result
+        bs_val = exp_data[0].get("val_basesim", exp_data[0].get("config", {}).get("bs", ""))
+        bs_str = f"\n(bs={bs_val:.4f}, L_MIN={PROTOCOL['L_MIN']}, CUT_PEN={PROTOCOL['CUT_PENALTY']})" if isinstance(bs_val, (int, float)) and bs_val > 0 else ""
+        ax.set_title(f"{exp_name}: Validation CR Comparison{bs_str}", fontsize=10)
         ax.tick_params(axis='x', rotation=30)
         fig.tight_layout()
         fig.savefig(str(plot_dir / f"{exp_name.lower()}_valcr_comparison.png"), dpi=150)
@@ -1518,6 +1876,8 @@ def generate_report(all_results: Dict, output_dir: Path, terminal_log: str):
     with open(md_path, "w") as f:
         f.write(f"# Q-RLSTC Thesis Experiment Report\n\n")
         f.write(f"Generated: {datetime.now().isoformat()}\n\n")
+        f.write(METRIC_DEFINITIONS)
+        f.write("\n")
         f.write(f"## Protocol Constants\n\n")
         f.write("```json\n")
         f.write(json.dumps(PROTOCOL, indent=2))
@@ -1544,16 +1904,18 @@ def generate_report(all_results: Dict, output_dir: Path, terminal_log: str):
 
 EXPERIMENT_REGISTRY = {
     "D1": "ValCR vs CUT% sweep (metric-only)",
-    "D2": "Q-margin profiling (piggybacked on E1-E6)",
-    "D3": "Replay training-action distribution (piggybacked on E1-E6)",
+    "D2": "Q-margin profiling (piggybacked on E1-E7)",
+    "D3": "Replay training-action distribution (piggybacked on E1-E7)",
     "D4": "Policy basin test (forced policies under drift)",
-    "D5": "Replay buffer histogram (piggybacked on E1-E6)",
+    "D5": "Replay buffer histogram (piggybacked on E1-E7)",
     "E1": "Core Quantum Utility",
     "E2": "NISQ Viability",
     "E3": "Shot Sensitivity",
     "E4": "Drift Resilience",
     "E5": "Low-Data Generalization",
     "E6": "Version Progression",
+    "E7": "Configuration Sweep (qubits × layers × ansatz)",
+    "E8": "Data Scaling (sample efficiency: 30/50/100/300 traj)",
     "S1": "Scalability Timing",
     "AB1": "Entanglement Ablation (no-CNOT vs linear)",
     "RA1": "Reward Ablation (naive vs shaped)",
@@ -1778,6 +2140,49 @@ def main():
                 all_results["AB1"] = ab1_results
                 print_summary_table(ab1_results, "AB1: Entanglement Ablation")
 
+        # ── E7: Configuration Sweep ──────────────────────────────
+        if "E7" in selected:
+            print(f"\n{'═'*70}")
+            print(f"  E7: CONFIGURATION SWEEP (qubits × layers × ansatz)")
+            print(f"{'═'*70}")
+            e7_specs = get_e7_specs()
+            print(f"  {len(e7_specs)} configurations to evaluate")
+            if seed_list and len(seed_list) > 1:
+                e7_results = run_multi_seed_experiment(
+                    get_e7_specs, args.traj_path, args.centers_path,
+                    args.amount, args.epochs, seed_list, "E7")
+                all_results["E7"] = e7_results
+                print_multi_seed_table(e7_results, "E7: Configuration Sweep")
+            else:
+                e7_results = []
+                for spec in e7_specs:
+                    agent = build_agent(spec, args.seed)
+                    r = train_and_evaluate(
+                        agent, spec, args.traj_path, args.centers_path,
+                        args.amount, args.epochs, args.seed)
+                    e7_results.append(r)
+                all_results["E7"] = e7_results
+                print_summary_table(e7_results, "E7: Configuration Sweep")
+
+        # ── E8: Data Scaling ──────────────────────────────────────
+        if "E8" in selected:
+            print(f"\n{'═'*70}")
+            print(f"  E8: DATA SCALING (sample efficiency)")
+            print(f"{'═'*70}")
+            e8_results = []
+            data_sizes = [30, 50, 100, 300]
+            for n_traj in data_sizes:
+                actual_n = min(n_traj, args.amount)
+                print(f"\n  --- {actual_n} trajectories ---")
+                for spec in get_e8_specs(actual_n):
+                    agent = build_agent(spec, args.seed)
+                    r = train_and_evaluate(
+                        agent, spec, args.traj_path, args.centers_path,
+                        actual_n, args.epochs, args.seed)
+                    e8_results.append(r)
+            all_results["E8"] = e8_results
+            print_summary_table(e8_results, "E8: Data Scaling")
+
         # ── RA1: Reward Ablation ─────────────────────────────────
         if "RA1" in selected:
             ra1_result = run_ra1_reward_ablation(
@@ -1791,16 +2196,28 @@ def main():
         print(f"{'═'*70}\n")
 
         all_model_results = []
-        for key in ["E1", "E2", "E3", "E4", "E5", "E6", "AB1"]:
+        for key in ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "AB1"]:
             data = all_results.get(key)
             if isinstance(data, list):
                 all_model_results.extend(data)
 
         if all_model_results:
-            print_summary_table(all_model_results, "All Models")
+            # ── Regime-separated tables ──────────────────────────
+            spsa_regime = [r for r in all_model_results
+                           if r.get("kind") in ("quantum", "classical")]
+            sgd_regime = [r for r in all_model_results
+                          if r.get("kind") in ("adam", "original")]
+
+            if sgd_regime:
+                print_summary_table(sgd_regime, "Regime A: SGD/Adam (backprop)")
+            if spsa_regime:
+                print_summary_table(spsa_regime, "Regime B: SPSA (gradient-free)")
+
+            # ── Constrained leaderboard ──────────────────────────
+            d1_data = all_results.get("D1")
+            print_constrained_leaderboard(all_model_results, d1_data)
 
             # Pareto table (D1 + learned agents)
-            d1_data = all_results.get("D1")
             if d1_data or len(all_model_results) > 0:
                 print_pareto_table(d1_data, all_model_results)
 

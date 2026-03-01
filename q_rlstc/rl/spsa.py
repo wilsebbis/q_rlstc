@@ -65,6 +65,7 @@ class SPSAOptimizer:
         seed: int = 42,
         use_momentum: bool = False,
         momentum: float = 0.9,
+        n_perturbations: int = 1,
     ):
         """Initialize SPSA optimizer.
         
@@ -92,6 +93,9 @@ class SPSAOptimizer:
         self.use_momentum = use_momentum
         self.beta = momentum
         self._momentum_buffer: Optional[np.ndarray] = None
+        
+        # Averaged SPSA (K-sample per step)
+        self.n_perturbations = max(1, n_perturbations)
     
     def _get_learning_rate(self, k: int) -> float:
         """Compute learning rate for iteration k.
@@ -131,18 +135,21 @@ class SPSAOptimizer:
         n_params = len(params)
         c_k = self._get_perturbation_magnitude(self.iteration)
         
-        # Sample perturbation
-        delta = self._sample_perturbation(n_params)
-        
-        # Evaluate function at perturbed points
-        params_plus = params + c_k * delta
-        params_minus = params - c_k * delta
-        
-        loss_plus = loss_fn(params_plus)
-        loss_minus = loss_fn(params_minus)
-        
-        # Estimate raw gradient
-        raw_gradient = (loss_plus - loss_minus) / (2 * c_k * delta)
+        # Averaged SPSA: K independent gradient estimates
+        K = self.n_perturbations
+        if K == 1:
+            delta = self._sample_perturbation(n_params)
+            loss_plus = loss_fn(params + c_k * delta)
+            loss_minus = loss_fn(params - c_k * delta)
+            raw_gradient = (loss_plus - loss_minus) / (2 * c_k * delta)
+        else:
+            grad_sum = np.zeros(n_params)
+            for _ in range(K):
+                delta = self._sample_perturbation(n_params)
+                loss_plus = loss_fn(params + c_k * delta)
+                loss_minus = loss_fn(params - c_k * delta)
+                grad_sum += (loss_plus - loss_minus) / (2 * c_k * delta)
+            raw_gradient = grad_sum / K
         
         # Apply momentum averaging if enabled
         if self.use_momentum:

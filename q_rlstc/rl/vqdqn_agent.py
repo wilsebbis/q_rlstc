@@ -7,6 +7,8 @@ Combines:
 - Target network for stable training
 """
 
+import warnings
+
 import numpy as np
 from typing import Optional, Tuple, Dict, Any
 from dataclasses import dataclass, field
@@ -39,6 +41,12 @@ class AgentConfig:
         shots: Measurement shots.
         use_double_dqn: Whether to use Double DQN.
         target_update_freq: Episodes between target updates.
+        exploration_mode: "epsilon_greedy" or "boltzmann".
+        boltzmann_temp: Initial Boltzmann temperature (higher → more random).
+        boltzmann_temp_min: Minimum temperature.
+        boltzmann_temp_decay: Multiplicative decay per episode.
+        q_clip_range: Symmetric Q-value clipping bound.
+        optimistic_cut_bias: Extra initial bias for CUT action (breaks symmetry).
     """
     version: str = "A"
     n_qubits: int = 5
@@ -51,6 +59,12 @@ class AgentConfig:
     use_double_dqn: bool = True
     target_update_freq: int = 10
     entanglement: str = "linear"  # 'linear', 'circular', 'full', 'none'
+    exploration_mode: str = "epsilon_greedy"  # "epsilon_greedy" or "boltzmann"
+    boltzmann_temp: float = 1.0
+    boltzmann_temp_min: float = 0.1
+    boltzmann_temp_decay: float = 0.99
+    q_clip_range: float = 50.0
+    optimistic_cut_bias: float = 0.0  # extra initial bias for Q(cut)
     
     def __post_init__(self):
         """Auto-set n_qubits from version if still at default."""
@@ -104,6 +118,9 @@ class VQDQNAgent:
         self._n_scale = 4 if self.version == "B" else 2
         init_scale = np.full(self._n_scale, 5.0)
         init_bias = np.zeros(2)
+        # Fix 4: Optimistic CUT init — break never-cut attractor
+        if self.config.optimistic_cut_bias != 0.0:
+            init_bias[1] = self.config.optimistic_cut_bias
         
         # Concatenate [circuit_params | scale | bias] into one SPSA vector
         self.params = np.concatenate([circuit_params, init_scale, init_bias])
@@ -112,9 +129,10 @@ class VQDQNAgent:
         
         # Exploration
         self.epsilon = self.config.epsilon_start
+        self.boltzmann_temp = self.config.boltzmann_temp
         
         # SPSA optimizer (optimizes all params: circuit + head)
-        self.optimizer = SPSAOptimizer(seed=seed)
+        self.optimizer = SPSAOptimizer(seed=seed, use_momentum=True, momentum=0.9)
         
         # Statistics
         self.episode_count = 0
@@ -171,23 +189,41 @@ class VQDQNAgent:
             readout_mode=self.readout_mode,
             entanglement=self.config.entanglement,
         )
-        return np.clip(q, -10.0, 10.0)
+        # Fix 5: NaN guard + widened clip
+        if not np.all(np.isfinite(q)):
+            warnings.warn(f"Non-finite Q-values detected: {q}. Replacing with 0.")
+            q = np.nan_to_num(q, nan=0.0, posinf=self.config.q_clip_range,
+                             neginf=-self.config.q_clip_range)
+        return np.clip(q, -self.config.q_clip_range, self.config.q_clip_range)
     
     def act(self, state: np.ndarray, greedy: bool = False) -> int:
-        """Select action using epsilon-greedy policy.
+        """Select action using epsilon-greedy or Boltzmann policy.
         
         Args:
             state: Current state.
-            greedy: If True, ignore epsilon and act greedily.
+            greedy: If True, ignore exploration and act greedily.
         
         Returns:
             Action (0 = extend, 1 = cut).
         """
-        if not greedy and self.rng.random() < self.epsilon:
-            return int(self.rng.integers(2))
-        
         q_values = self.get_q_values(state)
-        return int(np.argmax(q_values))
+        
+        if greedy:
+            return int(np.argmax(q_values))
+        
+        if self.config.exploration_mode == "boltzmann":
+            # Boltzmann / softmax exploration
+            tau = max(self.boltzmann_temp, 1e-8)
+            logits = q_values / tau
+            logits -= np.max(logits)  # numerical stability
+            probs = np.exp(logits)
+            probs /= probs.sum()
+            return int(self.rng.choice(2, p=probs))
+        else:
+            # ε-greedy exploration
+            if self.rng.random() < self.epsilon:
+                return int(self.rng.integers(2))
+            return int(np.argmax(q_values))
     
     def compute_targets_batch(
         self,
@@ -243,7 +279,8 @@ class VQDQNAgent:
             next_values = np.max(q_target, axis=1)
         
         targets[alive] += self.config.gamma * next_values
-        return np.clip(targets, -10.0, 10.0)
+        # Fix 5: widened target clip
+        return np.clip(targets, -self.config.q_clip_range, self.config.q_clip_range)
     
     def _batch_loss(
         self,
@@ -311,10 +348,15 @@ class VQDQNAgent:
         self.target_params = self.params.copy()
     
     def decay_epsilon(self) -> None:
-        """Decay exploration rate."""
+        """Decay exploration rate (epsilon and/or Boltzmann temperature)."""
         self.epsilon = max(
             self.config.epsilon_min,
             self.epsilon * self.config.epsilon_decay
+        )
+        # Also decay Boltzmann temperature
+        self.boltzmann_temp = max(
+            self.config.boltzmann_temp_min,
+            self.boltzmann_temp * self.config.boltzmann_temp_decay
         )
         self.episode_count += 1
         

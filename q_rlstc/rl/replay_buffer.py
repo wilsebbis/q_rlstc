@@ -118,6 +118,60 @@ class ReplayBuffer:
         
         return states, actions, rewards, next_states, dones
     
+    def sample_batch_stratified(
+        self,
+        batch_size: int,
+        min_cut_quota: float = 0.3,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Sample batch with minimum CUT action quota.
+        
+        Guarantees at least `min_cut_quota` fraction of CUT (action=1)
+        transitions in the batch, if enough exist in the buffer.
+        Falls back to uniform sampling if insuffient CUT data.
+        
+        Args:
+            batch_size: Number of experiences.
+            min_cut_quota: Minimum fraction of CUT samples (0.0–1.0).
+        
+        Returns:
+            Tuple of (states, actions, rewards, next_states, dones).
+        """
+        if batch_size > len(self.buffer):
+            raise ValueError(
+                f"Not enough experiences: {len(self.buffer)} < {batch_size}"
+            )
+        
+        # Separate indices by action
+        cut_indices = [i for i, e in enumerate(self.buffer) if e.action == 1]
+        ext_indices = [i for i, e in enumerate(self.buffer) if e.action == 0]
+        
+        n_cut_needed = max(1, int(np.ceil(batch_size * min_cut_quota)))
+        
+        # Fallback: not enough CUT transitions → uniform sampling
+        if len(cut_indices) < n_cut_needed:
+            return self.sample_batch(batch_size)
+        
+        n_ext_needed = batch_size - n_cut_needed
+        
+        # If not enough EXTEND either, adjust
+        if len(ext_indices) < n_ext_needed:
+            n_ext_needed = len(ext_indices)
+            n_cut_needed = batch_size - n_ext_needed
+        
+        chosen_cut = self.rng.choice(cut_indices, n_cut_needed, replace=False)
+        chosen_ext = self.rng.choice(ext_indices, n_ext_needed, replace=False)
+        indices = np.concatenate([chosen_cut, chosen_ext])
+        self.rng.shuffle(indices)
+        
+        batch = [self.buffer[i] for i in indices]
+        states = np.array([e.state for e in batch])
+        actions = np.array([e.action for e in batch])
+        rewards = np.array([e.reward for e in batch])
+        next_states = np.array([e.next_state for e in batch])
+        dones = np.array([e.done for e in batch])
+        
+        return states, actions, rewards, next_states, dones
+
     def clear(self) -> None:
         """Clear all experiences from buffer."""
         self.buffer.clear()

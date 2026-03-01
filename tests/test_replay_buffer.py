@@ -100,3 +100,44 @@ class TestReplayBufferReady:
                 done=False,
             )
         assert buf.is_ready(min_size=32)
+
+
+class TestStratifiedSampling:
+    """Fix 2b: Action-stratified replay sampling."""
+
+    def test_quota_met(self):
+        """With balanced buffer, CUT quota should be met."""
+        buf = ReplayBuffer(max_size=200, seed=42)
+        # Add 100 EXTEND and 100 CUT
+        for i in range(100):
+            buf.add(np.array([float(i)]), 0, 1.0, np.array([float(i+1)]), False)
+            buf.add(np.array([float(i)]), 1, 1.0, np.array([float(i+1)]), False)
+        
+        states, actions, _, _, _ = buf.sample_batch_stratified(32, min_cut_quota=0.3)
+        cut_frac = np.mean(actions == 1)
+        assert cut_frac >= 0.29, f"CUT fraction {cut_frac:.2f} < 0.3 quota"
+        assert len(states) == 32
+
+    def test_quota_fallback_with_no_cuts(self):
+        """With only EXTEND data, should fall back to uniform (no crash)."""
+        buf = ReplayBuffer(max_size=100, seed=42)
+        for i in range(50):
+            buf.add(np.array([float(i)]), 0, 1.0, np.array([float(i+1)]), False)
+        
+        states, actions, _, _, _ = buf.sample_batch_stratified(16, min_cut_quota=0.3)
+        assert len(states) == 16
+        # All should be EXTEND since that's all we have
+        assert np.all(actions == 0)
+
+    def test_quota_with_sparse_cuts(self):
+        """With sparse CUT data, should use all available CUTs."""
+        buf = ReplayBuffer(max_size=200, seed=42)
+        # 95 EXTEND, 5 CUT
+        for i in range(95):
+            buf.add(np.array([float(i)]), 0, 1.0, np.array([float(i+1)]), False)
+        for i in range(5):
+            buf.add(np.array([float(i)]), 1, 1.0, np.array([float(i+1)]), False)
+        
+        # Quota wants 0.3 * 32 = 9.6 → 9 CUTs, but only 5 exist → fallback
+        states, actions, _, _, _ = buf.sample_batch_stratified(32, min_cut_quota=0.3)
+        assert len(states) == 32
