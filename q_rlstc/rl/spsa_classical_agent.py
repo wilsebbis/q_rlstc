@@ -46,6 +46,12 @@ class ClassicalAgentConfig:
     epsilon_decay: float = 0.99
     use_double_dqn: bool = True
     target_update_freq: int = 10
+    exploration_mode: str = "epsilon_greedy"  # "epsilon_greedy" or "boltzmann"
+    boltzmann_temp: float = 1.0
+    boltzmann_temp_min: float = 0.1
+    boltzmann_temp_decay: float = 0.99
+    q_clip_range: float = 50.0
+    optimistic_cut_bias: float = 0.0
 
     def __post_init__(self):
         if self.hidden_sizes is None:
@@ -105,10 +111,16 @@ class SPSAClassicalDQN:
             # biases start at zero
             offset += n_b
 
+        # Optimistic CUT bias (fair comparison with quantum)
+        if self.config.optimistic_cut_bias != 0.0:
+            # Set last bias (output layer bias for action 1)
+            self.params[self.n_params - 1] = self.config.optimistic_cut_bias
+
         self.target_params = self.params.copy()
 
         # Exploration
         self.epsilon = self.config.epsilon_start
+        self.boltzmann_temp = self.config.boltzmann_temp
 
         # SPSA optimizer (same config as quantum)
         self.optimizer = SPSAOptimizer(
@@ -156,7 +168,7 @@ class SPSAClassicalDQN:
             if not self._use_rbf and i < len(self._layer_shapes) - 1:
                 x = np.maximum(0, x)
         # Clamp outputs to prevent value explosion (max |Q| ≈ γ/(1-γ) * max|r| ≈ 10)
-        return np.clip(x, -10.0, 10.0)  # (B, 2)
+        return np.clip(x, -self.config.q_clip_range, self.config.q_clip_range)  # (B, 2)
 
     def _forward_batch(
         self, states: np.ndarray, params: np.ndarray
@@ -174,11 +186,21 @@ class SPSAClassicalDQN:
         return self._forward(state, p).flatten()
 
     def act(self, state: np.ndarray, greedy: bool = False) -> int:
-        """ε-greedy action selection."""
-        if not greedy and self.rng.random() < self.epsilon:
-            return int(self.rng.integers(2))
+        """Action selection (ε-greedy or Boltzmann)."""
         q = self.get_q_values(state)
-        return int(np.argmax(q))
+        if greedy:
+            return int(np.argmax(q))
+        if self.config.exploration_mode == "boltzmann":
+            tau = max(self.boltzmann_temp, 1e-8)
+            logits = q / tau
+            logits -= np.max(logits)
+            probs = np.exp(logits)
+            probs /= probs.sum()
+            return int(self.rng.choice(2, p=probs))
+        else:
+            if self.rng.random() < self.epsilon:
+                return int(self.rng.integers(2))
+            return int(np.argmax(q))
 
     # ── Target computation ────────────────────────────────────────
 
@@ -206,7 +228,7 @@ class SPSAClassicalDQN:
             next_values = np.max(q_target, axis=1)
 
         targets[alive] += self.config.gamma * next_values
-        return np.clip(targets, -10.0, 10.0)
+        return np.clip(targets, -self.config.q_clip_range, self.config.q_clip_range)
 
     # ── SPSA update ───────────────────────────────────────────────
 
@@ -257,10 +279,14 @@ class SPSAClassicalDQN:
         self.target_params = self.params.copy()
 
     def decay_epsilon(self) -> None:
-        """Decay ε and periodically hard-copy target network."""
+        """Decay exploration (ε and Boltzmann temperature) + target copy."""
         self.epsilon = max(
             self.config.epsilon_min,
             self.epsilon * self.config.epsilon_decay,
+        )
+        self.boltzmann_temp = max(
+            self.config.boltzmann_temp_min,
+            self.boltzmann_temp * self.config.boltzmann_temp_decay,
         )
         self.episode_count += 1
         if self.episode_count % self.config.target_update_freq == 0:

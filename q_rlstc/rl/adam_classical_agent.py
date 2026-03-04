@@ -30,6 +30,12 @@ class AdamAgentConfig:
     beta2: float = 0.999
     adam_eps: float = 1e-8
     max_grad_norm: float = 10.0
+    exploration_mode: str = "epsilon_greedy"  # "epsilon_greedy" or "boltzmann"
+    boltzmann_temp: float = 1.0
+    boltzmann_temp_min: float = 0.1
+    boltzmann_temp_decay: float = 0.99
+    q_clip_range: float = 50.0
+    optimistic_cut_bias: float = 0.0
 
     def __post_init__(self):
         self.hidden_sizes = list(self.hidden_sizes)
@@ -81,8 +87,16 @@ class AdamClassicalDQN:
         self.adam_v = [(np.zeros_like(W), np.zeros_like(b)) for W, b in self.weights]
         self.adam_t = 0  # timestep counter
 
+        # Optimistic CUT bias (fair comparison with quantum)
+        if self.config.optimistic_cut_bias != 0.0:
+            _, b_out = self.weights[-1]
+            b_out[1] = self.config.optimistic_cut_bias
+            _, b_out_t = self.target_weights[-1]
+            b_out_t[1] = self.config.optimistic_cut_bias
+
         # Exploration
         self.epsilon = self.config.epsilon_start
+        self.boltzmann_temp = self.config.boltzmann_temp
 
         # Statistics
         self.episode_count = 0
@@ -102,7 +116,7 @@ class AdamClassicalDQN:
             x = x @ W + b
             if i < self.n_layers - 1:
                 x = np.maximum(0, x)  # ReLU
-        return np.clip(x, -10.0, 10.0)
+        return np.clip(x, -self.config.q_clip_range, self.config.q_clip_range)
 
     def _forward_with_cache(self, states: np.ndarray, weights=None):
         """Forward pass returning intermediate activations for backprop."""
@@ -122,9 +136,9 @@ class AdamClassicalDQN:
             activations.append(x)
 
         # Clamp output
-        clamped = np.clip(x, -10.0, 10.0)
+        clamped = np.clip(x, -self.config.q_clip_range, self.config.q_clip_range)
         # Track clamp mask for gradient
-        clamp_mask = (x >= -10.0) & (x <= 10.0)
+        clamp_mask = (x >= -self.config.q_clip_range) & (x <= self.config.q_clip_range)
         activations[-1] = clamped
 
         return clamped, activations, pre_activations, clamp_mask
@@ -144,10 +158,21 @@ class AdamClassicalDQN:
         return q.ravel()
 
     def act(self, state: np.ndarray, greedy: bool = False) -> int:
-        """ε-greedy action selection."""
-        if not greedy and self.rng.random() < self.epsilon:
-            return int(self.rng.integers(0, self.ACTION_DIM))
-        return int(np.argmax(self.get_q_values(state)))
+        """Action selection (ε-greedy or Boltzmann)."""
+        q = self.get_q_values(state)
+        if greedy:
+            return int(np.argmax(q))
+        if self.config.exploration_mode == "boltzmann":
+            tau = max(self.boltzmann_temp, 1e-8)
+            logits = q / tau
+            logits -= np.max(logits)
+            probs = np.exp(logits)
+            probs /= probs.sum()
+            return int(self.rng.choice(2, p=probs))
+        else:
+            if self.rng.random() < self.epsilon:
+                return int(self.rng.integers(0, self.ACTION_DIM))
+            return int(np.argmax(q))
 
     # ── TD target computation ──────────────────────────────────────
 
@@ -161,7 +186,7 @@ class AdamClassicalDQN:
         targets = rewards.copy()
         alive = ~dones.astype(bool)
         if not alive.any():
-            return np.clip(targets, -10.0, 10.0)
+            return np.clip(targets, -self.config.q_clip_range, self.config.q_clip_range)
 
         alive_next = next_states[alive]
 
@@ -310,10 +335,14 @@ class AdamClassicalDQN:
         self.target_weights = [(W.copy(), b.copy()) for W, b in self.weights]
 
     def decay_epsilon(self):
-        """Decay ε and periodically hard-copy target network."""
+        """Decay exploration (ε and Boltzmann temperature) + target copy."""
         self.epsilon = max(
             self.config.epsilon_min,
             self.epsilon * self.config.epsilon_decay,
+        )
+        self.boltzmann_temp = max(
+            self.config.boltzmann_temp_min,
+            self.boltzmann_temp * self.config.boltzmann_temp_decay,
         )
         self.episode_count += 1
         if self.episode_count % self.config.target_update_freq == 0:

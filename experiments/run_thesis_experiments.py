@@ -125,20 +125,23 @@ PROTOCOL = {
     "CUT_PENALTY": 0.12,
     "EXTEND_COST": 0.01,
     "COMPLEXITY_LAMBDA": 0.03,
-    "MIN_CUT_BONUS": 0.15,       # bonus for first CUT in episode (anti-collapse)
+    "MIN_CUT_BONUS": 0.30,       # bonus for first CUT in episode (starts HIGH, anneals)
+    "MIN_CUT_BONUS_FINAL": 0.15, # final MIN_CUT_BONUS after curriculum annealing
     "COLLAPSE_CUT_THRESHOLD": 1.0,  # CUT% below this → collapsed
-    # Fix 2: Adaptive Lagrangian cut budget
+    # Fix 2: Adaptive Lagrangian cut budget (R6 advisor overhaul)
     "USE_LAGRANGIAN": True,        # enable adaptive CUT penalty
     "TARGET_CUT_PCT": 10.0,        # target CUT rate (%)
-    "LAGRANGIAN_LR": 0.02,         # dual variable learning rate (increased for stiffer response)
-    "LAMBDA_MAX": 2.0,             # cap to prevent runaway
-    "LAMBDA_BLEND_GREEDY": 0.7,    # weight on GreedyCUT% vs TrainCUT%
+    "LAGRANGIAN_LR": 0.02,         # dual variable learning rate
+    "LAMBDA_MAX": 2.0,             # absolute cap to prevent runaway
+    "LAMBDA_DELTA_MAX": 0.05,      # R6(B): max Δλ per epoch (damp oscillation)
+    "LAMBDA_CUT_EMA": 0.9,         # R6(B): EMA decay for smoothed cut rate
+    "LAMBDA_FREEZE_EPOCHS": 1,     # R6(C): freeze λ for first N epochs
     # Fix 4: Faster epsilon for small data
     "EPSILON_DECAY_MODE": "per_step",   # "per_episode" or "per_step"
     "EPSILON_DECAY_PER_STEP": 0.9995,   # ε≈0.1 after ~4600 steps
-    # Fix 4b: Forced-cut curriculum
-    "FORCED_CUT_PROB": 0.15,       # probability of forced CUT override in early epochs
-    "FORCED_CUT_EPOCHS": 1,        # only force in first N epochs
+    # Fix 4b: Forced-cut curriculum (R6(E): stronger)
+    "FORCED_CUT_PROB": 0.25,       # R6(E): probability of forced CUT (was 0.15)
+    "FORCED_CUT_EPOCHS": 2,        # R6(E): force CUT in first N epochs (was 1)
     # Fix 2b: Action-stratified replay
     "USE_STRATIFIED_REPLAY": True,  # enable action-stratified replay
     "MIN_CUT_QUOTA": 0.3,           # minimum CUT fraction per batch
@@ -206,6 +209,7 @@ class ModelSpec:
     run_type: str = "standard"
     data_fraction: float = 1.0
     entanglement: str = "linear"  # 'linear', 'circular', 'full', 'none'
+    version: str = "D"            # quantum circuit version: 'D' (standard), 'E' (Quantum B)
 
 
 def build_agent(spec: ModelSpec, seed: int):
@@ -213,7 +217,7 @@ def build_agent(spec: ModelSpec, seed: int):
     if spec.kind == "quantum":
         from q_rlstc.rl.vqdqn_agent import VQDQNAgent, AgentConfig
         cfg = AgentConfig(
-            version="D",
+            version=spec.version,
             n_qubits=spec.n_qubits,
             n_layers=spec.n_layers,
             gamma=PROTOCOL["gamma"],
@@ -245,6 +249,12 @@ def build_agent(spec: ModelSpec, seed: int):
             epsilon_decay=PROTOCOL["epsilon_decay"],
             use_double_dqn=True,
             target_update_freq=PROTOCOL["target_update_freq"],
+            exploration_mode=PROTOCOL.get("EXPLORATION_MODE", "epsilon_greedy"),
+            boltzmann_temp=PROTOCOL.get("BOLTZMANN_TEMP_START", 1.0),
+            boltzmann_temp_min=PROTOCOL.get("BOLTZMANN_TEMP_MIN", 0.1),
+            boltzmann_temp_decay=PROTOCOL.get("BOLTZMANN_TEMP_DECAY", 0.99),
+            q_clip_range=PROTOCOL.get("Q_CLIP_RANGE", 50.0),
+            optimistic_cut_bias=PROTOCOL.get("OPTIMISTIC_CUT_BIAS", 0.0),
         )
         return AdamClassicalDQN(config=cfg, seed=seed)
     elif spec.kind == "original":
@@ -267,6 +277,12 @@ def build_agent(spec: ModelSpec, seed: int):
             epsilon_decay=PROTOCOL["epsilon_decay"],
             use_double_dqn=True,
             target_update_freq=PROTOCOL["target_update_freq"],
+            exploration_mode=PROTOCOL.get("EXPLORATION_MODE", "epsilon_greedy"),
+            boltzmann_temp=PROTOCOL.get("BOLTZMANN_TEMP_START", 1.0),
+            boltzmann_temp_min=PROTOCOL.get("BOLTZMANN_TEMP_MIN", 0.1),
+            boltzmann_temp_decay=PROTOCOL.get("BOLTZMANN_TEMP_DECAY", 0.99),
+            q_clip_range=PROTOCOL.get("Q_CLIP_RANGE", 50.0),
+            optimistic_cut_bias=PROTOCOL.get("OPTIMISTIC_CUT_BIAS", 0.0),
         )
         return SPSAClassicalDQN(config=cfg, seed=seed)
 
@@ -350,14 +366,22 @@ def train_and_evaluate(
     MIN_CUT_BONUS = PROTOCOL["MIN_CUT_BONUS"]
     batch_size = PROTOCOL["batch_size"]
 
-    # Fix 2: Adaptive Lagrangian cut penalty
+    # Fix 2: Adaptive Lagrangian cut penalty (R6 advisor overhaul)
     use_lagrangian = PROTOCOL.get("USE_LAGRANGIAN", False)
     lagrangian_lambda = CUT_PENALTY  # initialize from static value
     target_cut_pct = PROTOCOL.get("TARGET_CUT_PCT", 10.0)
     lagrangian_lr = PROTOCOL.get("LAGRANGIAN_LR", 0.02)
     lambda_max = PROTOCOL.get("LAMBDA_MAX", 2.0)
-    lambda_blend_greedy = PROTOCOL.get("LAMBDA_BLEND_GREEDY", 0.7)
+    lambda_delta_max = PROTOCOL.get("LAMBDA_DELTA_MAX", 0.05)  # R6(B): Δλ clamp
+    lambda_cut_ema_decay = PROTOCOL.get("LAMBDA_CUT_EMA", 0.9) # R6(B): EMA
+    lambda_freeze_epochs = PROTOCOL.get("LAMBDA_FREEZE_EPOCHS", 1)  # R6(C)
     lagrangian_history = []  # track λ over epochs
+    cut_rate_ema = None  # R6(B): EMA-smoothed cut rate (init from first epoch)
+    
+    # R6(D): MIN_CUT_BONUS curriculum — start high, anneal to final
+    min_cut_bonus_start = PROTOCOL.get("MIN_CUT_BONUS", 0.30)
+    min_cut_bonus_final = PROTOCOL.get("MIN_CUT_BONUS_FINAL", 0.15)
+    current_min_cut_bonus = min_cut_bonus_start  # will be annealed per epoch
 
     # Fix 2b: Action-stratified replay
     use_stratified = PROTOCOL.get("USE_STRATIFIED_REPLAY", True)
@@ -385,6 +409,9 @@ def train_and_evaluate(
     # Fix 6: ΔQ distribution logging
     delta_q_train_stats = []  # per-epoch ΔQ stats from training
     delta_q_val_stats = []    # per-epoch ΔQ stats from validation
+    # R6(F): per-epoch reward component tracking
+    r_cut_means = []     # mean immediate reward when action=CUT
+    r_extend_means = []  # mean immediate reward when action=EXTEND
     best_bundle = {"val_cr": float("inf"), "cut_pct": 0.0,
                    "n_segs": 0, "epoch": -1, "avg_reward": 0.0, "sse": 0.0,
                    "silhouette": 0.0}
@@ -429,6 +456,8 @@ def train_and_evaluate(
         epoch_extends_in_training = 0
         epoch_forced_cuts = 0
         epoch_delta_q_train = []  # Fix 6: ΔQ per training step
+        epoch_r_cuts = []   # R6(F): immediate rewards on CUT actions
+        epoch_r_extends = []  # R6(F): immediate rewards on EXTEND actions
         epoch_start = time.time()
         _last_tick = epoch_start
 
@@ -490,13 +519,15 @@ def train_and_evaluate(
                 if actual_action == 0:
                     reward -= EXTEND_COST
                     epoch_extends_in_training += 1
+                    epoch_r_extends.append(float(reward))
                 if actual_action == 1:
-                    # Anti-collapse: bonus for first CUT in episode
+                    # R6(D): Anti-collapse bonus with curriculum annealing
                     if n_cuts == 0:
-                        reward += MIN_CUT_BONUS
+                        reward += current_min_cut_bonus
                     reward -= active_cut_pen
                     n_cuts += 1
                     epoch_cuts_in_training += 1
+                    epoch_r_cuts.append(float(reward))
                 n_steps += 1
 
                 raw_split_od = raw_split_od_next
@@ -730,21 +761,59 @@ def train_and_evaluate(
         env.update_cluster("T")
         scheduler.update()
 
-        # Fix 1: Lagrangian update — drive λ from GreedyCUT%, not TrainCUT%
+        # R6(F): Log reward component breakdown
+        r_cut_mean = float(np.mean(epoch_r_cuts)) if epoch_r_cuts else 0.0
+        r_ext_mean = float(np.mean(epoch_r_extends)) if epoch_r_extends else 0.0
+        r_cut_means.append(r_cut_mean)
+        r_extend_means.append(r_ext_mean)
+        print(f"    R6 reward components: r̄_cut={r_cut_mean:+.4f} r̄_ext={r_ext_mean:+.4f}"
+              f" (Δ={r_cut_mean - r_ext_mean:+.4f}, "
+              f"bonus={current_min_cut_bonus:.3f})")
+
+        # R6(D): Anneal MIN_CUT_BONUS — linear schedule from start→final
+        if n_epochs > 1:
+            progress = min(1.0, (epoch + 1) / n_epochs)
+            current_min_cut_bonus = (min_cut_bonus_start
+                                      + progress * (min_cut_bonus_final - min_cut_bonus_start))
+
+        # R6: Overhauled λ controller — advisor-identified root cause fix
+        # Key principle: λ must track the signal being optimized (batch CUT rate),
+        # NOT greedy evaluation CUT rate. Greedy is logged as diagnostic only.
         if use_lagrangian:
             epoch_total = epoch_cuts_in_training + epoch_extends_in_training
-            behavior_rate = (100.0 * epoch_cuts_in_training / max(epoch_total, 1))
-            greedy_rate = cut_pct  # already computed from validation loop above
-            # Blend: primarily greedy, with behavior smoothing
-            effective_rate = lambda_blend_greedy * greedy_rate + (1 - lambda_blend_greedy) * behavior_rate
+            batch_cut_rate = (100.0 * epoch_cuts_in_training / max(epoch_total, 1))
+            greedy_rate = cut_pct  # diagnostic only — NOT used for λ
+
+            # R6(B): EMA-smooth the batch CUT rate to reduce noise
+            if cut_rate_ema is None:
+                cut_rate_ema = batch_cut_rate  # initialize from first observation
+            else:
+                cut_rate_ema = (lambda_cut_ema_decay * cut_rate_ema
+                                + (1 - lambda_cut_ema_decay) * batch_cut_rate)
+
             lambda_before = lagrangian_lambda
+
+            # R6(C): Freeze λ for first N epochs — let policy learn basic cut behavior
+            if epoch < lambda_freeze_epochs:
+                delta_lambda = 0.0
+                freeze_status = "FROZEN"
+            else:
+                # Compute raw Δλ from EMA-smoothed batch rate
+                raw_delta = lagrangian_lr * (cut_rate_ema - target_cut_pct)
+                # R6(B): Clamp Δλ to prevent wild swings (±0.05 default)
+                delta_lambda = max(-lambda_delta_max, min(lambda_delta_max, raw_delta))
+                freeze_status = "ACTIVE"
+
             lagrangian_lambda = max(0.0, min(lambda_max,
-                lagrangian_lambda + lagrangian_lr * (effective_rate - target_cut_pct)))
-            delta_lambda = lagrangian_lambda - lambda_before
+                                             lagrangian_lambda + delta_lambda))
             lagrangian_history.append(lagrangian_lambda)
-            print(f"    λ_before={lambda_before:.4f} → λ_after={lagrangian_lambda:.4f} | "
-                  f"greedy={greedy_rate:.1f}% train={behavior_rate:.1f}% "
-                  f"target={target_cut_pct:.0f}% Δλ={delta_lambda:+.4f}")
+            print(f"    λ [{freeze_status}]: {lambda_before:.4f} → {lagrangian_lambda:.4f} | "
+                  f"batch={batch_cut_rate:.1f}% ema={cut_rate_ema:.1f}% "
+                  f"greedy={greedy_rate:.1f}%(diag) "
+                  f"target={target_cut_pct:.0f}% Δλ={delta_lambda:+.4f}"
+                  f" (raw={raw_delta:+.4f} clamped)" if epoch >= lambda_freeze_epochs
+                  else f"    λ [{freeze_status}]: {lambda_before:.4f} (held) | "
+                       f"batch={batch_cut_rate:.1f}% greedy={greedy_rate:.1f}%(diag)")
 
     elapsed = time.time() - start_time
 
@@ -924,6 +993,25 @@ def get_ablation_entanglement_specs():
     return [
         ModelSpec("VQ-DQN (no-CNOT)", "quantum", n_layers=3, entanglement="none"),
         ModelSpec("VQ-DQN (linear)",  "quantum", n_layers=3, entanglement="linear"),
+    ]
+
+
+def get_e9_specs():
+    """E9 — Quantum B: Best quantum with all quantum-specific optimizations.
+
+    Version E: learnable input scaling + anti-barren-plateau init +
+    circular entanglement + multi-observable readout + data re-uploading.
+    Compared against both Quantum A and best classical controls.
+    """
+    return [
+        # Quantum B — everything turned to 11
+        ModelSpec("VQ-DQN-B (5q×3L)",  "quantum", n_qubits=5, n_layers=3, version="E"),
+        # Quantum A — fair fight baseline (same model, no quantum tricks)
+        ModelSpec("VQ-DQN-A (5q×3L)",  "quantum", n_qubits=5, n_layers=3, version="D"),
+        # Classical controls
+        ModelSpec("MLP-34 (SPSA)",      "classical", hidden_sizes=[4]),
+        ModelSpec("MLP-34 (Adam)",       "adam", hidden_sizes=[4]),
+        ModelSpec("Control B (h=64)",   "classical", hidden_sizes=[64]),
     ]
 
 
@@ -1916,6 +2004,7 @@ EXPERIMENT_REGISTRY = {
     "E6": "Version Progression",
     "E7": "Configuration Sweep (qubits × layers × ansatz)",
     "E8": "Data Scaling (sample efficiency: 30/50/100/300 traj)",
+    "E9": "Quantum B (input scaling + anti-BP + circular entanglement)",
     "S1": "Scalability Timing",
     "AB1": "Entanglement Ablation (no-CNOT vs linear)",
     "RA1": "Reward Ablation (naive vs shaped)",
@@ -2182,6 +2271,22 @@ def main():
                     e8_results.append(r)
             all_results["E8"] = e8_results
             print_summary_table(e8_results, "E8: Data Scaling")
+
+        # ── E9: Quantum B ──────────────────────────────────────────
+        if "E9" in selected:
+            print(f"\n{'═'*70}")
+            print(f"  E9: QUANTUM B — Best Quantum (input scaling + anti-BP + circular)")
+            print(f"{'═'*70}")
+            e9_results = []
+            for spec in get_e9_specs():
+                for s in seeds:
+                    agent = build_agent(spec, s)
+                    r = train_and_evaluate(
+                        agent, spec, args.traj_path, args.centers_path,
+                        args.amount, args.epochs, s)
+                    e9_results.append(r)
+            all_results["E9"] = e9_results
+            print_summary_table(e9_results, "E9: Quantum B")
 
         # ── RA1: Reward Ablation ─────────────────────────────────
         if "RA1" in selected:
