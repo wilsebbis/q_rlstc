@@ -52,6 +52,8 @@ class ClassicalAgentConfig:
     boltzmann_temp_decay: float = 0.99
     q_clip_range: float = 50.0
     optimistic_cut_bias: float = 0.0
+    use_soft_targets: bool = False    # entropy-regularized targets (soft-DQN)
+    soft_alpha: float = 0.1           # entropy temperature for soft targets
 
     def __post_init__(self):
         if self.hidden_sizes is None:
@@ -226,6 +228,11 @@ class SPSAClassicalDQN:
         else:
             q_target = self._forward_batch(alive_next, self.target_params)
             next_values = np.max(q_target, axis=1)
+
+        # Soft-DQN: optionally use entropy-regularized targets
+        if self.config.use_soft_targets:
+            from q_rlstc.rl.soft_targets import soft_value
+            next_values = soft_value(q_target, alpha=self.config.soft_alpha)
 
         targets[alive] += self.config.gamma * next_values
         return np.clip(targets, -self.config.q_clip_range, self.config.q_clip_range)

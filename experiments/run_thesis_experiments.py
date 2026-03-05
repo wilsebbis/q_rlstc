@@ -45,10 +45,62 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Training Mode: CONTROLLED_SPSA (thesis default) vs RLSTC_PARITY
+# ═══════════════════════════════════════════════════════════════════════
+
+class TrainingMode(Enum):
+    """Training regime selector.
+
+    CONTROLLED_SPSA: Thesis default — SPSA optimizer, reward shaping,
+        Lagrangian CUT budget, anti-gaming constraints.
+    RLSTC_PARITY: Reproduces RLSTC paper's training loop as closely as
+        possible — SGD, γ=0.99, raw OD-delta reward, soft target τ=0.001,
+        per-step ε decay. Enables direct comparison under RLSTC's own
+        conditions.
+    """
+    CONTROLLED_SPSA = "controlled_spsa"
+    RLSTC_PARITY = "rlstc_parity"
+
+
+RLSTC_PARITY_PROTOCOL = {
+    # ── Matched to RLSTC paper (sub-traj.pdf) ──
+    "batch_size": 32,
+    "memory_size": 5000,
+    "gamma": 0.99,                      # RLSTC paper
+    "huber_delta": 1.0,
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.1,
+    "epsilon_decay": 0.99,              # per-step (RLSTC: ε ← 0.99ε each step)
+    "EPSILON_DECAY_MODE": "per_step",
+    "EPSILON_DECAY_PER_STEP": 0.99,
+    "target_update_freq": 1,            # soft update every episode
+    "SOFT_TARGET_TAU": 0.001,           # ω from RLSTC paper (θ̂ ← ωθ̂ + (1−ω)θ)
+    "USE_SOFT_TARGET": True,
+    # ── Shaping OFF (pure OD delta reward) ──
+    "L_MIN": 1,                         # no min-segment constraint
+    "CUT_PENALTY": 0.0,
+    "EXTEND_COST": 0.0,
+    "COMPLEXITY_LAMBDA": 0.0,
+    "MIN_CUT_BONUS": 0.0,
+    "MIN_CUT_BONUS_FINAL": 0.0,
+    "USE_LAGRANGIAN": False,
+    "FORCED_CUT_PROB": 0.0,
+    "FORCED_CUT_EPOCHS": 0,
+    "EXPLORATION_MODE": "epsilon_greedy",
+    "OPTIMISTIC_CUT_BIAS": 0.0,
+    "USE_STRATIFIED_REPLAY": False,
+    "REWARD_MODE": "raw_od_delta",      # r_t = OD_t − OD_{t+1}
+    "Q_CLIP_RANGE": 50.0,
+    "COLLAPSE_CUT_THRESHOLD": 0.0,      # no collapse detection in parity
+}
 
 
 def _collect_env_metadata() -> Dict[str, str]:
@@ -130,7 +182,8 @@ PROTOCOL = {
     "COLLAPSE_CUT_THRESHOLD": 1.0,  # CUT% below this → collapsed
     # Fix 2: Adaptive Lagrangian cut budget (R6 advisor overhaul)
     "USE_LAGRANGIAN": True,        # enable adaptive CUT penalty
-    "TARGET_CUT_PCT": 10.0,        # target CUT rate (%)
+    "TARGET_CUT_PCT": 10.0,        # b_soft: target CUT rate (%) for dual λ update
+    "B_HARD_CUT_PCT": 30.0,        # b_hard: evaluation threshold — CUT% above this is flagged
     "LAGRANGIAN_LR": 0.02,         # dual variable learning rate
     "LAMBDA_MAX": 2.0,             # absolute cap to prevent runaway
     "LAMBDA_DELTA_MAX": 0.05,      # R6(B): max Δλ per epoch (damp oscillation)
@@ -210,29 +263,38 @@ class ModelSpec:
     data_fraction: float = 1.0
     entanglement: str = "linear"  # 'linear', 'circular', 'full', 'none'
     version: str = "D"            # quantum circuit version: 'D' (standard), 'E' (Quantum B)
+    training_mode: TrainingMode = TrainingMode.CONTROLLED_SPSA
+
+
+def _get_protocol(spec: ModelSpec) -> Dict[str, Any]:
+    """Return the active protocol dict based on training mode."""
+    if spec.training_mode == TrainingMode.RLSTC_PARITY:
+        return RLSTC_PARITY_PROTOCOL
+    return PROTOCOL
 
 
 def build_agent(spec: ModelSpec, seed: int):
     """Construct agent from spec (same as run_rigorous_benchmark)."""
+    proto = _get_protocol(spec)
     if spec.kind == "quantum":
         from q_rlstc.rl.vqdqn_agent import VQDQNAgent, AgentConfig
         cfg = AgentConfig(
             version=spec.version,
             n_qubits=spec.n_qubits,
             n_layers=spec.n_layers,
-            gamma=PROTOCOL["gamma"],
-            epsilon_start=PROTOCOL["epsilon_start"],
-            epsilon_min=PROTOCOL["epsilon_min"],
-            epsilon_decay=PROTOCOL["epsilon_decay"],
+            gamma=proto["gamma"],
+            epsilon_start=proto["epsilon_start"],
+            epsilon_min=proto["epsilon_min"],
+            epsilon_decay=proto["epsilon_decay"],
             shots=spec.shots,
-            target_update_freq=PROTOCOL["target_update_freq"],
+            target_update_freq=proto["target_update_freq"],
             entanglement=spec.entanglement,
-            exploration_mode=PROTOCOL.get("EXPLORATION_MODE", "epsilon_greedy"),
-            boltzmann_temp=PROTOCOL.get("BOLTZMANN_TEMP_START", 1.0),
-            boltzmann_temp_min=PROTOCOL.get("BOLTZMANN_TEMP_MIN", 0.1),
-            boltzmann_temp_decay=PROTOCOL.get("BOLTZMANN_TEMP_DECAY", 0.99),
-            q_clip_range=PROTOCOL.get("Q_CLIP_RANGE", 50.0),
-            optimistic_cut_bias=PROTOCOL.get("OPTIMISTIC_CUT_BIAS", 0.0),
+            exploration_mode=proto.get("EXPLORATION_MODE", "epsilon_greedy"),
+            boltzmann_temp=proto.get("BOLTZMANN_TEMP_START", 1.0),
+            boltzmann_temp_min=proto.get("BOLTZMANN_TEMP_MIN", 0.1),
+            boltzmann_temp_decay=proto.get("BOLTZMANN_TEMP_DECAY", 0.99),
+            q_clip_range=proto.get("Q_CLIP_RANGE", 50.0),
+            optimistic_cut_bias=proto.get("OPTIMISTIC_CUT_BIAS", 0.0),
         )
         backend = None
         if spec.noise_model != "ideal":
@@ -243,46 +305,46 @@ def build_agent(spec: ModelSpec, seed: int):
         from q_rlstc.rl.adam_classical_agent import AdamClassicalDQN, AdamAgentConfig
         cfg = AdamAgentConfig(
             hidden_sizes=spec.hidden_sizes,
-            gamma=PROTOCOL["gamma"],
-            epsilon_start=PROTOCOL["epsilon_start"],
-            epsilon_min=PROTOCOL["epsilon_min"],
-            epsilon_decay=PROTOCOL["epsilon_decay"],
+            gamma=proto["gamma"],
+            epsilon_start=proto["epsilon_start"],
+            epsilon_min=proto["epsilon_min"],
+            epsilon_decay=proto["epsilon_decay"],
             use_double_dqn=True,
-            target_update_freq=PROTOCOL["target_update_freq"],
-            exploration_mode=PROTOCOL.get("EXPLORATION_MODE", "epsilon_greedy"),
-            boltzmann_temp=PROTOCOL.get("BOLTZMANN_TEMP_START", 1.0),
-            boltzmann_temp_min=PROTOCOL.get("BOLTZMANN_TEMP_MIN", 0.1),
-            boltzmann_temp_decay=PROTOCOL.get("BOLTZMANN_TEMP_DECAY", 0.99),
-            q_clip_range=PROTOCOL.get("Q_CLIP_RANGE", 50.0),
-            optimistic_cut_bias=PROTOCOL.get("OPTIMISTIC_CUT_BIAS", 0.0),
+            target_update_freq=proto["target_update_freq"],
+            exploration_mode=proto.get("EXPLORATION_MODE", "epsilon_greedy"),
+            boltzmann_temp=proto.get("BOLTZMANN_TEMP_START", 1.0),
+            boltzmann_temp_min=proto.get("BOLTZMANN_TEMP_MIN", 0.1),
+            boltzmann_temp_decay=proto.get("BOLTZMANN_TEMP_DECAY", 0.99),
+            q_clip_range=proto.get("Q_CLIP_RANGE", 50.0),
+            optimistic_cut_bias=proto.get("OPTIMISTIC_CUT_BIAS", 0.0),
         )
         return AdamClassicalDQN(config=cfg, seed=seed)
     elif spec.kind == "original":
         from q_rlstc.rl.original_classical_agent import OriginalClassicalDQN, OriginalAgentConfig
         cfg = OriginalAgentConfig(
             hidden_size=64,
-            gamma=PROTOCOL["gamma"],
-            epsilon_start=PROTOCOL["epsilon_start"],
-            epsilon_min=PROTOCOL["epsilon_min"],
-            epsilon_decay=PROTOCOL["epsilon_decay"],
+            gamma=proto["gamma"],
+            epsilon_start=proto["epsilon_start"],
+            epsilon_min=proto["epsilon_min"],
+            epsilon_decay=proto["epsilon_decay"],
         )
         return OriginalClassicalDQN(config=cfg, seed=seed)
     else:
         from q_rlstc.rl.spsa_classical_agent import SPSAClassicalDQN, ClassicalAgentConfig
         cfg = ClassicalAgentConfig(
             hidden_sizes=spec.hidden_sizes,
-            gamma=PROTOCOL["gamma"],
-            epsilon_start=PROTOCOL["epsilon_start"],
-            epsilon_min=PROTOCOL["epsilon_min"],
-            epsilon_decay=PROTOCOL["epsilon_decay"],
+            gamma=proto["gamma"],
+            epsilon_start=proto["epsilon_start"],
+            epsilon_min=proto["epsilon_min"],
+            epsilon_decay=proto["epsilon_decay"],
             use_double_dqn=True,
-            target_update_freq=PROTOCOL["target_update_freq"],
-            exploration_mode=PROTOCOL.get("EXPLORATION_MODE", "epsilon_greedy"),
-            boltzmann_temp=PROTOCOL.get("BOLTZMANN_TEMP_START", 1.0),
-            boltzmann_temp_min=PROTOCOL.get("BOLTZMANN_TEMP_MIN", 0.1),
-            boltzmann_temp_decay=PROTOCOL.get("BOLTZMANN_TEMP_DECAY", 0.99),
-            q_clip_range=PROTOCOL.get("Q_CLIP_RANGE", 50.0),
-            optimistic_cut_bias=PROTOCOL.get("OPTIMISTIC_CUT_BIAS", 0.0),
+            target_update_freq=proto["target_update_freq"],
+            exploration_mode=proto.get("EXPLORATION_MODE", "epsilon_greedy"),
+            boltzmann_temp=proto.get("BOLTZMANN_TEMP_START", 1.0),
+            boltzmann_temp_min=proto.get("BOLTZMANN_TEMP_MIN", 0.1),
+            boltzmann_temp_decay=proto.get("BOLTZMANN_TEMP_DECAY", 0.99),
+            q_clip_range=proto.get("Q_CLIP_RANGE", 50.0),
+            optimistic_cut_bias=proto.get("OPTIMISTIC_CUT_BIAS", 0.0),
         )
         return SPSAClassicalDQN(config=cfg, seed=seed)
 
@@ -324,9 +386,13 @@ def train_and_evaluate(
     seed: int,
 ) -> Dict[str, Any]:
     """Run training + evaluation for one model with diagnostic instrumentation."""
+    proto = _get_protocol(spec)
+    is_parity = spec.training_mode == TrainingMode.RLSTC_PARITY
 
     from q_rlstc.data.rlstc_mdp import TrajRLclus
-    from q_rlstc.data.rlstc_cluster import compute_overdist, compute_sse
+    from q_rlstc.data.rlstc_cluster import (
+        compute_overdist, compute_sse, compute_overdist_length_weighted
+    )
     from q_rlstc.rl.replay_buffer import ReplayBuffer
     from q_rlstc.data.trajectory_scheduler import TrajectoryScheduler
 
@@ -359,41 +425,46 @@ def train_and_evaluate(
     def scale_reward(r):
         return float(np.clip(r / _ied_scale, -1.0, 1.0))
 
-    L_MIN = PROTOCOL["L_MIN"]
-    CUT_PENALTY = PROTOCOL["CUT_PENALTY"]
-    EXTEND_COST = PROTOCOL["EXTEND_COST"]
-    COMPLEXITY_LAMBDA = PROTOCOL["COMPLEXITY_LAMBDA"]
-    MIN_CUT_BONUS = PROTOCOL["MIN_CUT_BONUS"]
-    batch_size = PROTOCOL["batch_size"]
+    L_MIN = proto["L_MIN"]
+    CUT_PENALTY = proto["CUT_PENALTY"]
+    EXTEND_COST = proto["EXTEND_COST"]
+    COMPLEXITY_LAMBDA = proto["COMPLEXITY_LAMBDA"]
+    MIN_CUT_BONUS = proto["MIN_CUT_BONUS"]
+    batch_size = proto["batch_size"]
+
+    # RLSTC Parity: soft target update configuration
+    use_soft_target = proto.get("USE_SOFT_TARGET", False)
+    soft_target_tau = proto.get("SOFT_TARGET_TAU", 0.001)
+    reward_mode = proto.get("REWARD_MODE", "shaped")  # "shaped" or "raw_od_delta"
 
     # Fix 2: Adaptive Lagrangian cut penalty (R6 advisor overhaul)
-    use_lagrangian = PROTOCOL.get("USE_LAGRANGIAN", False)
+    use_lagrangian = proto.get("USE_LAGRANGIAN", False)
     lagrangian_lambda = CUT_PENALTY  # initialize from static value
-    target_cut_pct = PROTOCOL.get("TARGET_CUT_PCT", 10.0)
-    lagrangian_lr = PROTOCOL.get("LAGRANGIAN_LR", 0.02)
-    lambda_max = PROTOCOL.get("LAMBDA_MAX", 2.0)
-    lambda_delta_max = PROTOCOL.get("LAMBDA_DELTA_MAX", 0.05)  # R6(B): Δλ clamp
-    lambda_cut_ema_decay = PROTOCOL.get("LAMBDA_CUT_EMA", 0.9) # R6(B): EMA
-    lambda_freeze_epochs = PROTOCOL.get("LAMBDA_FREEZE_EPOCHS", 1)  # R6(C)
+    target_cut_pct = proto.get("TARGET_CUT_PCT", 10.0)
+    lagrangian_lr = proto.get("LAGRANGIAN_LR", 0.02)
+    lambda_max = proto.get("LAMBDA_MAX", 2.0)
+    lambda_delta_max = proto.get("LAMBDA_DELTA_MAX", 0.05)  # R6(B): Δλ clamp
+    lambda_cut_ema_decay = proto.get("LAMBDA_CUT_EMA", 0.9) # R6(B): EMA
+    lambda_freeze_epochs = proto.get("LAMBDA_FREEZE_EPOCHS", 1)  # R6(C)
     lagrangian_history = []  # track λ over epochs
     cut_rate_ema = None  # R6(B): EMA-smoothed cut rate (init from first epoch)
     
     # R6(D): MIN_CUT_BONUS curriculum — start high, anneal to final
-    min_cut_bonus_start = PROTOCOL.get("MIN_CUT_BONUS", 0.30)
-    min_cut_bonus_final = PROTOCOL.get("MIN_CUT_BONUS_FINAL", 0.15)
+    min_cut_bonus_start = proto.get("MIN_CUT_BONUS", 0.30)
+    min_cut_bonus_final = proto.get("MIN_CUT_BONUS_FINAL", 0.15)
     current_min_cut_bonus = min_cut_bonus_start  # will be annealed per epoch
 
     # Fix 2b: Action-stratified replay
-    use_stratified = PROTOCOL.get("USE_STRATIFIED_REPLAY", True)
-    min_cut_quota = PROTOCOL.get("MIN_CUT_QUOTA", 0.3)
+    use_stratified = proto.get("USE_STRATIFIED_REPLAY", True)
+    min_cut_quota = proto.get("MIN_CUT_QUOTA", 0.3)
 
     # Fix 4b: Forced-cut curriculum
-    forced_cut_prob = PROTOCOL.get("FORCED_CUT_PROB", 0.15)
-    forced_cut_epochs = PROTOCOL.get("FORCED_CUT_EPOCHS", 1)
+    forced_cut_prob = proto.get("FORCED_CUT_PROB", 0.15)
+    forced_cut_epochs = proto.get("FORCED_CUT_EPOCHS", 1)
 
     # Fix 4: Epsilon decay mode
-    eps_mode = PROTOCOL.get("EPSILON_DECAY_MODE", "per_episode")
-    eps_per_step = PROTOCOL.get("EPSILON_DECAY_PER_STEP", 0.9995)
+    eps_mode = proto.get("EPSILON_DECAY_MODE", "per_episode")
+    eps_per_step = proto.get("EPSILON_DECAY_PER_STEP", 0.9995)
 
     # Tracking
     all_rewards = []
@@ -403,6 +474,7 @@ def train_and_evaluate(
     val_cr_medians = []     # Median per-trajectory CR per epoch
     val_sses = []           # SSE per epoch
     val_silhouettes = []    # Silhouette coefficient per epoch
+    val_wvalcrs = []        # Length-weighted ValCR per epoch (fragmentation-robust)
     q_margins = []          # D2: mean(Q_extend - Q_cut) per epoch (all val steps)
     replay_cut_pcts = []    # D3: CUT ratio in training actions per epoch
     replay_buf_cut_pcts = []  # D5: CUT ratio in actual replay buffer
@@ -429,21 +501,27 @@ def train_and_evaluate(
     # Determine optimizer name for legend
     opt_name = {"quantum": "SPSA", "classical": "SPSA",
                 "adam": "Adam", "original": "SGD"}.get(spec.kind, spec.kind)
+    mode_str = f" [{spec.training_mode.value}]" if is_parity else ""
     q_info = ""
     if spec.kind == "quantum":
         q_info = (f" | {spec.n_qubits}q×{spec.n_layers}L "
                   f"{spec.entanglement} | {spec.noise_model} | shots={spec.shots}")
     legend = (f"{spec.name} — {opt_name} — {agent.n_params}p"
-              f" — {n_trajectories}traj/{n_epochs}ep/seed={seed}{q_info}")
+              f" — {n_trajectories}traj/{n_epochs}ep/seed={seed}{q_info}{mode_str}")
     print(f"  {legend}")
-    cut_pen_str = 'λ-adaptive' if use_lagrangian else f'{CUT_PENALTY:.4f}'
-    print(f"  Reward weights: CUT_PEN={cut_pen_str}"
-          f" EXTEND_COST={EXTEND_COST} MIN_CUT_BONUS={MIN_CUT_BONUS}"
-          f" COMPLEXITY_λ={COMPLEXITY_LAMBDA}")
-    if use_lagrangian:
-        print(f"  Lagrangian: target={target_cut_pct:.0f}% lr={lagrangian_lr} λ_init={CUT_PENALTY}")
+    if is_parity:
+        print(f"  ⚙ RLSTC PARITY MODE — γ={proto['gamma']}, "
+              f"ε_decay={eps_per_step}/step, "
+              f"soft_τ={soft_target_tau}, reward=raw_OD_delta")
+    else:
+        cut_pen_str = 'λ-adaptive' if use_lagrangian else f'{CUT_PENALTY:.4f}'
+        print(f"  Reward weights: CUT_PEN={cut_pen_str}"
+              f" EXTEND_COST={EXTEND_COST} MIN_CUT_BONUS={MIN_CUT_BONUS}"
+              f" COMPLEXITY_λ={COMPLEXITY_LAMBDA}")
+        if use_lagrangian:
+            print(f"  Lagrangian: target={target_cut_pct:.0f}% lr={lagrangian_lr} λ_init={CUT_PENALTY}")
     print(f"  Epsilon: mode={eps_mode}"
-          f" {'decay/step='+str(eps_per_step) if eps_mode == 'per_step' else 'decay/ep='+str(PROTOCOL['epsilon_decay'])}")
+          f" {'decay/step='+str(eps_per_step) if eps_mode == 'per_step' else 'decay/ep='+str(proto['epsilon_decay'])}")
     print(f"  bs (fold baseline OD) = {fold_basesim:.6f}")
     print(f"  Epochs: {n_epochs} × {scheduler.active_training_size} trajectories"
           f" | val={eidx-sidx} trajectories")
@@ -513,21 +591,31 @@ def train_and_evaluate(
 
                 reward = scale_reward(reward)
 
-                # Use adaptive λ if Lagrangian enabled, else static penalty
-                active_cut_pen = lagrangian_lambda if use_lagrangian else CUT_PENALTY
+                if reward_mode == "raw_od_delta":
+                    # RLSTC Parity: pure OD delta, no shaping
+                    if actual_action == 0:
+                        epoch_extends_in_training += 1
+                        epoch_r_extends.append(float(reward))
+                    if actual_action == 1:
+                        n_cuts += 1
+                        epoch_cuts_in_training += 1
+                        epoch_r_cuts.append(float(reward))
+                else:
+                    # Use adaptive λ if Lagrangian enabled, else static penalty
+                    active_cut_pen = lagrangian_lambda if use_lagrangian else CUT_PENALTY
 
-                if actual_action == 0:
-                    reward -= EXTEND_COST
-                    epoch_extends_in_training += 1
-                    epoch_r_extends.append(float(reward))
-                if actual_action == 1:
-                    # R6(D): Anti-collapse bonus with curriculum annealing
-                    if n_cuts == 0:
-                        reward += current_min_cut_bonus
-                    reward -= active_cut_pen
-                    n_cuts += 1
-                    epoch_cuts_in_training += 1
-                    epoch_r_cuts.append(float(reward))
+                    if actual_action == 0:
+                        reward -= EXTEND_COST
+                        epoch_extends_in_training += 1
+                        epoch_r_extends.append(float(reward))
+                    if actual_action == 1:
+                        # R6(D): Anti-collapse bonus with curriculum annealing
+                        if n_cuts == 0:
+                            reward += current_min_cut_bonus
+                        reward -= active_cut_pen
+                        n_cuts += 1
+                        epoch_cuts_in_training += 1
+                        epoch_r_cuts.append(float(reward))
                 n_steps += 1
 
                 raw_split_od = raw_split_od_next
@@ -570,6 +658,9 @@ def train_and_evaluate(
             epoch_rewards.append(episode_reward)
             if eps_mode == "per_episode":
                 agent.decay_epsilon()
+            # RLSTC Parity: soft target update at end of each episode
+            if use_soft_target and hasattr(agent, 'soft_update'):
+                agent.soft_update(tau=soft_target_tau)
 
         # ── End-of-epoch validation (SINGLE PASS — fixed) ──────
         # Collects: cut/extend counts, per-episode segs, Q-margins
@@ -622,6 +713,14 @@ def train_and_evaluate(
                 per_traj_crs.append(traj_cr)
         val_cr_median = float(np.median(per_traj_crs)) if per_traj_crs else val_cr
         val_cr_medians.append(val_cr_median)
+
+        # wValCR — length-weighted OD (robust to fragmentation attractor)
+        try:
+            val_wod = float(compute_overdist_length_weighted(env.clusters_E))
+            val_wvalcr = val_wod / max(val_basesim, 1e-8)
+        except Exception:
+            val_wvalcr = float('inf')
+        val_wvalcrs.append(val_wvalcr)
 
         try:
             val_sse = float(compute_sse(env.clusters_E))
@@ -710,6 +809,7 @@ def train_and_evaluate(
                 "val_cr": val_cr, "cut_pct": cut_pct,
                 "val_od": float(val_od), "val_basesim": val_basesim,
                 "val_cr_median": val_cr_median,
+                "val_wvalcr": val_wvalcr,
                 "n_segs": val_segs, "epoch": epoch + 1,
                 "avg_reward": float(np.mean(epoch_rewards)),
                 "sse": val_sse,
@@ -741,7 +841,7 @@ def train_and_evaluate(
 
         print(f"  Epoch {epoch+1:2d}/{n_epochs}: "
               f"ValCR={val_cr:.4f} (OD={val_od:.4f}/bs={val_basesim:.4f}) "
-              f"medCR={val_cr_median:.4f} | "
+              f"medCR={val_cr_median:.4f} wCR={val_wvalcr:.4f} | "
               f"Sil={val_sil:+.3f} | "
               f"R̄={np.mean(epoch_rewards):+.3f} | "
               f"GreedyCUT={cut_pct:.0f}% | "
@@ -818,10 +918,15 @@ def train_and_evaluate(
     elapsed = time.time() - start_time
 
     # Collapse detection: if best-epoch CUT% below threshold → collapsed
-    is_collapsed = best_bundle["cut_pct"] < PROTOCOL["COLLAPSE_CUT_THRESHOLD"]
-    if is_collapsed:
+    collapse_thresh = proto.get("COLLAPSE_CUT_THRESHOLD", 1.0)
+    is_collapsed = best_bundle["cut_pct"] < collapse_thresh
+    if is_collapsed and not is_parity:
         print(f"  ⚠ COLLAPSED: CUT%={best_bundle['cut_pct']:.1f}% < "
-              f"{PROTOCOL['COLLAPSE_CUT_THRESHOLD']}% — policy never learned to cut")
+              f"{collapse_thresh}% — policy never learned to cut")
+
+    # Budget violation flag (CMDP b_hard threshold)
+    b_hard = proto.get("B_HARD_CUT_PCT", 30.0)
+    budget_violated = best_bundle["cut_pct"] > b_hard if b_hard > 0 else False
 
     return {
         "model": spec.name,
@@ -831,6 +936,7 @@ def train_and_evaluate(
         "run_type": spec.run_type,
         "data_fraction": spec.data_fraction,
         "collapsed": is_collapsed,
+        "budget_violated": budget_violated,
         # Configuration metadata (advisor item #5)
         "config": {
             "n_qubits": spec.n_qubits,
@@ -839,7 +945,8 @@ def train_and_evaluate(
             "entanglement": spec.entanglement,
             "noise_model": spec.noise_model,
             "version": getattr(agent, 'version', 'N/A'),
-            "protocol": dict(PROTOCOL),
+            "training_mode": spec.training_mode.value,
+            "protocol": dict(proto),
             "env_metadata": _collect_env_metadata(),
         },
         # Best-epoch bundle
@@ -847,6 +954,7 @@ def train_and_evaluate(
         "val_od": best_bundle.get("val_od", 0.0),
         "val_basesim": best_bundle.get("val_basesim", 0.0),
         "val_cr_median": best_bundle.get("val_cr_median", 0.0),
+        "val_wvalcr": best_bundle.get("val_wvalcr", 0.0),
         "cut_pct": best_bundle["cut_pct"],  # GreedyCUT% (validation, post-L_MIN override)
         "n_segs": best_bundle["n_segs"],    # total segments across all val trajectories
         "n_val_episodes": eidx - sidx,       # number of validation trajectories
@@ -870,6 +978,7 @@ def train_and_evaluate(
         "val_ods": val_ods,
         "val_basesims": val_basesims,
         "val_cr_medians": val_cr_medians,
+        "val_wvalcrs": val_wvalcrs,
         "val_cut_pcts": val_cut_pcts,
         "val_seg_counts": val_seg_counts,
         "val_sses": val_sses,
@@ -993,6 +1102,34 @@ def get_ablation_entanglement_specs():
     return [
         ModelSpec("VQ-DQN (no-CNOT)", "quantum", n_layers=3, entanglement="none"),
         ModelSpec("VQ-DQN (linear)",  "quantum", n_layers=3, entanglement="linear"),
+    ]
+
+
+def get_parity_specs():
+    """PARITY — RLSTC Parity Comparison.
+
+    Runs VQ-DQN, parameter-matched classical MLP, and Original RLSTC under
+    RLSTC's own training conditions (γ=0.99, per-step ε, SGD, soft τ=0.001,
+    raw OD-delta reward). Paired with the same models under thesis CONTROLLED_SPSA
+    conditions for direct A/B comparison.
+    """
+    parity = TrainingMode.RLSTC_PARITY
+    thesis = TrainingMode.CONTROLLED_SPSA
+    return [
+        # ── Under RLSTC parity conditions ──
+        ModelSpec("VQ-DQN (parity)",     "quantum",   n_layers=3,
+                  training_mode=parity),
+        ModelSpec("MLP-34 SPSA (parity)","classical",  hidden_sizes=[4],
+                  training_mode=parity),
+        ModelSpec("RLSTC (parity)",      "original",
+                  training_mode=parity),
+        # ── Under thesis conditions (controlled comparison) ──
+        ModelSpec("VQ-DQN (thesis)",     "quantum",   n_layers=3,
+                  training_mode=thesis),
+        ModelSpec("MLP-34 SPSA (thesis)","classical",  hidden_sizes=[4],
+                  training_mode=thesis),
+        ModelSpec("RLSTC (thesis)",      "original",
+                  training_mode=thesis),
     ]
 
 
@@ -2008,6 +2145,7 @@ EXPERIMENT_REGISTRY = {
     "S1": "Scalability Timing",
     "AB1": "Entanglement Ablation (no-CNOT vs linear)",
     "RA1": "Reward Ablation (naive vs shaped)",
+    "PARITY": "RLSTC Parity Comparison (thesis vs RLSTC conditions)",
 }
 
 
@@ -2294,6 +2432,29 @@ def main():
                 args.traj_path, args.centers_path,
                 min(args.amount, 30), args.epochs, args.seed)
             all_results["RA1"] = ra1_result
+
+        # ── PARITY: RLSTC Parity Comparison ──────────────────────
+        if "PARITY" in selected:
+            print(f"\n{'═'*70}")
+            print(f"  PARITY: RLSTC PARITY COMPARISON")
+            print(f"  (VQ-DQN / MLP-34 / Original under RLSTC vs Thesis conditions)")
+            print(f"{'═'*70}")
+            if seed_list and len(seed_list) > 1:
+                parity_results = run_multi_seed_experiment(
+                    get_parity_specs, args.traj_path, args.centers_path,
+                    args.amount, args.epochs, seed_list, "PARITY")
+                all_results["PARITY"] = parity_results
+                print_multi_seed_table(parity_results, "PARITY: RLSTC Parity")
+            else:
+                parity_results = []
+                for spec in get_parity_specs():
+                    agent = build_agent(spec, args.seed)
+                    r = train_and_evaluate(
+                        agent, spec, args.traj_path, args.centers_path,
+                        args.amount, args.epochs, args.seed)
+                    parity_results.append(r)
+                all_results["PARITY"] = parity_results
+                print_summary_table(parity_results, "PARITY: RLSTC Parity")
 
         # ── Grand summary ────────────────────────────────────────
         print(f"\n{'═'*70}")

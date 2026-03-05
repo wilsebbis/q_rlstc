@@ -70,6 +70,8 @@ class AgentConfig:
     optimistic_cut_bias: float = 0.0  # extra initial bias for Q(cut)
     use_input_scaling: bool = False   # learnable per-feature scale+shift
     anti_barren_plateau: bool = False # near-zero circuit param init
+    use_soft_targets: bool = False    # entropy-regularized targets (soft-DQN)
+    soft_alpha: float = 0.1           # entropy temperature for soft targets
     
     def __post_init__(self):
         """Auto-set fields from version."""
@@ -347,6 +349,12 @@ class VQDQNAgent:
                 output_scale=target_scale, output_bias=target_bias,
                 entanglement=self.config.entanglement)
             next_values = np.max(q_target, axis=1)
+        
+        # Soft-DQN: optionally use entropy-regularized targets
+        if self.config.use_soft_targets:
+            from q_rlstc.rl.soft_targets import soft_value
+            # Override with soft value (q_target already computed above)
+            next_values = soft_value(q_target, alpha=self.config.soft_alpha)
         
         targets[alive] += self.config.gamma * next_values
         # Fix 5: widened target clip

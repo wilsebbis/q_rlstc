@@ -115,3 +115,99 @@ class TestSPSAGradientClipping:
         _, grad_norm = opt.step(loss_fn, params)
         # Should not have been clipped (gradient of small values is small)
         assert grad_norm < 100
+
+
+class TestSPSACRN:
+    """Common Random Numbers (CRN) deterministic seeding."""
+
+    def test_crn_sets_current_seed(self):
+        """CRN should set _current_crn_seed during loss evaluation."""
+        seeds_observed = []
+        opt = SPSAOptimizer(a=0.12, c=0.10, A=20, seed=42,
+                            use_crn=True, crn_base_seed=123)
+
+        def loss_fn(p):
+            seeds_observed.append(opt._current_crn_seed)
+            return float(np.sum(p ** 2))
+
+        params = np.array([1.0, -1.0])
+        opt.compute_gradient(loss_fn, params)
+        # Should have been called twice (+δ and -δ)
+        assert len(seeds_observed) == 2
+        # Seeds should differ between +δ and -δ evaluations
+        assert seeds_observed[0] != seeds_observed[1]
+        # Both should be deterministic integers
+        assert all(isinstance(s, int) for s in seeds_observed)
+
+    def test_crn_reproducible(self):
+        """Same CRN setup should produce same seeds on repeated runs."""
+        def collect_seeds(seed, base):
+            seeds = []
+            opt = SPSAOptimizer(a=0.12, c=0.10, A=20, seed=seed,
+                                use_crn=True, crn_base_seed=base)
+            def loss_fn(p):
+                seeds.append(opt._current_crn_seed)
+                return float(np.sum(p ** 2))
+            opt.compute_gradient(loss_fn, np.array([1.0]))
+            return seeds
+
+        s1 = collect_seeds(42, 123)
+        s2 = collect_seeds(42, 123)
+        assert s1 == s2
+
+    def test_crn_none_when_disabled(self):
+        """When CRN is off, _current_crn_seed should remain None."""
+        opt = SPSAOptimizer(a=0.12, c=0.10, A=20, seed=42, use_crn=False)
+
+        def loss_fn(p):
+            assert opt._current_crn_seed is None
+            return float(np.sum(p ** 2))
+
+        opt.compute_gradient(loss_fn, np.array([1.0, -1.0]))
+
+
+class TestSPSAParamScales:
+    """Per-parameter perturbation scaling."""
+
+    def test_scales_affect_gradient(self):
+        """Different param_scales should produce different gradient estimates."""
+        params = np.array([1.0, -2.0])
+
+        def loss_fn(p):
+            return float(np.sum(p ** 2))
+
+        opt1 = SPSAOptimizer(a=0.12, c=0.10, A=20, seed=42, param_scales=None)
+        g1 = opt1.compute_gradient(loss_fn, params)
+
+        opt2 = SPSAOptimizer(a=0.12, c=0.10, A=20, seed=42,
+                             param_scales=np.array([1.0, 0.1]))
+        g2 = opt2.compute_gradient(loss_fn, params)
+
+        # Different scales → different gradients (same perturbation seed)
+        assert not np.allclose(g1, g2)
+
+
+class TestSPSAMultiPerturbation:
+    """K-sample gradient averaging."""
+
+    def test_multi_perturbation_reduces_variance(self):
+        """K>1 should reduce gradient variance compared to K=1."""
+        params = np.array([1.0, -2.0, 0.5])
+
+        def loss_fn(p):
+            return float(np.sum(p ** 2))
+
+        # Collect gradient norms from K=1 vs K=5 across many seeds
+        norms_k1, norms_k5 = [], []
+        for s in range(30):
+            opt1 = SPSAOptimizer(a=0.5, c=0.1, A=0, seed=s, n_perturbations=1)
+            g1 = opt1.compute_gradient(loss_fn, params)
+            norms_k1.append(np.linalg.norm(g1))
+
+            opt5 = SPSAOptimizer(a=0.5, c=0.1, A=0, seed=s, n_perturbations=5)
+            g5 = opt5.compute_gradient(loss_fn, params)
+            norms_k5.append(np.linalg.norm(g5))
+
+        # K=5 should have lower variance in gradient norms
+        assert np.std(norms_k5) < np.std(norms_k1)
+

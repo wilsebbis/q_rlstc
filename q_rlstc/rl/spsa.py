@@ -7,6 +7,10 @@ Q-RLSTC 2.0: Adds Momentum-SPSA (m-SPSA) for faster convergence
 by tracking a moving average of past gradients, enabling the system
 to "blast through" bad gradient estimations from shot noise.
 
+Q-RLSTC 2.1: Adds Common Random Numbers (CRN) option for reduced
+variance — fixes measurement seed across (θ+cδ, θ-cδ) evaluations
+so noise cancels in the gradient estimate.
+
 Based on: J.C. Spall, "An Overview of the Simultaneous Perturbation Method
 for Efficient Optimization" (1998)
 """
@@ -66,6 +70,9 @@ class SPSAOptimizer:
         use_momentum: bool = False,
         momentum: float = 0.9,
         n_perturbations: int = 1,
+        use_crn: bool = False,
+        crn_base_seed: int = 0,
+        param_scales: Optional[np.ndarray] = None,
     ):
         """Initialize SPSA optimizer.
         
@@ -79,6 +86,14 @@ class SPSAOptimizer:
             seed: Random seed for perturbations.
             use_momentum: Enable momentum-SPSA.
             momentum: Momentum coefficient β (0.9 typical).
+            n_perturbations: Number of independent gradient estimates to average.
+            use_crn: Common Random Numbers — fix measurement seed across
+                (θ+cδ, θ-cδ) so shot noise cancels in the gradient.
+            crn_base_seed: Base seed for CRN (only used when use_crn=True).
+            param_scales: Per-parameter perturbation scaling (shape: n_params).
+                If provided, δ is element-wise multiplied by param_scales.
+                Use to apply larger perturbations to circuit angles vs. output
+                weights. Default: uniform (all 1.0).
         """
         self.A = A
         self.a = a
@@ -96,6 +111,14 @@ class SPSAOptimizer:
         
         # Averaged SPSA (K-sample per step)
         self.n_perturbations = max(1, n_perturbations)
+        
+        # Common Random Numbers (CRN)
+        self.use_crn = use_crn
+        self.crn_base_seed = crn_base_seed
+        
+        # Per-parameter perturbation scaling
+        self._param_scales = param_scales  # set externally or None
+        self._current_crn_seed = None  # set during compute_gradient for CRN
     
     def _get_learning_rate(self, k: int) -> float:
         """Compute learning rate for iteration k.
@@ -135,20 +158,42 @@ class SPSAOptimizer:
         n_params = len(params)
         c_k = self._get_perturbation_magnitude(self.iteration)
         
+        # Per-parameter scaling if provided
+        scales = self._param_scales
+        if scales is not None:
+            scales = np.asarray(scales)
+            if len(scales) != n_params:
+                scales = None  # fallback if mismatch
+        
         # Averaged SPSA: K independent gradient estimates
         K = self.n_perturbations
         if K == 1:
             delta = self._sample_perturbation(n_params)
+            if scales is not None:
+                delta = delta * scales
+            # CRN: set deterministic seed for +/- evaluations so shot noise cancels
+            if self.use_crn:
+                self._current_crn_seed = hash((self.crn_base_seed, self.iteration, 0, 1)) % (2**31)
             loss_plus = loss_fn(params + c_k * delta)
+            if self.use_crn:
+                self._current_crn_seed = hash((self.crn_base_seed, self.iteration, 0, -1)) % (2**31)
             loss_minus = loss_fn(params - c_k * delta)
+            self._current_crn_seed = None
             raw_gradient = (loss_plus - loss_minus) / (2 * c_k * delta)
         else:
             grad_sum = np.zeros(n_params)
-            for _ in range(K):
+            for ki in range(K):
                 delta = self._sample_perturbation(n_params)
+                if scales is not None:
+                    delta = delta * scales
+                if self.use_crn:
+                    self._current_crn_seed = hash((self.crn_base_seed, self.iteration, ki, 1)) % (2**31)
                 loss_plus = loss_fn(params + c_k * delta)
+                if self.use_crn:
+                    self._current_crn_seed = hash((self.crn_base_seed, self.iteration, ki, -1)) % (2**31)
                 loss_minus = loss_fn(params - c_k * delta)
                 grad_sum += (loss_plus - loss_minus) / (2 * c_k * delta)
+            self._current_crn_seed = None
             raw_gradient = grad_sum / K
         
         # Apply momentum averaging if enabled

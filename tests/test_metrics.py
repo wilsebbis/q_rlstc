@@ -1,7 +1,7 @@
 """Tests for clustering metrics.
 
 Verifies OD computation, silhouette score range, segmentation F1,
-incremental OD update, and edge cases.
+incremental OD update, weighted ValCR, and random-policy advantage.
 """
 
 import numpy as np
@@ -13,6 +13,8 @@ from q_rlstc.clustering.metrics import (
     segmentation_f1,
     incremental_od_update,
     od_improvement_reward,
+    weighted_valcr,
+    random_policy_advantage,
 )
 
 
@@ -149,3 +151,73 @@ class TestODImprovementReward:
         r1 = od_improvement_reward(5.0, 3.0, scale=1.0)
         r2 = od_improvement_reward(5.0, 3.0, scale=2.0)
         assert r2 == pytest.approx(2 * r1)
+
+
+class TestWeightedValCR:
+    """Tests for weighted_valcr metric."""
+
+    def test_equal_lengths_matches_unweighted(self):
+        """When all segments have equal length, wValCR ≈ mean(OD_i/basesim)."""
+        ods = [2.0, 4.0, 6.0]
+        lengths = [10, 10, 10]
+        basesim = 5.0
+        w = weighted_valcr(ods, lengths, basesim)
+        # Unweighted mean CR: (0.4 + 0.8 + 1.2) / 3 = 0.8
+        assert w == pytest.approx(0.8, abs=1e-10)
+
+    def test_long_segment_dominates(self):
+        """A long segment should dominate over short segments."""
+        ods = [1.0, 10.0]       # short=cheap, long=expensive
+        lengths = [3, 100]      # short segment vs long segment
+        basesim = 5.0
+        w = weighted_valcr(ods, lengths, basesim)
+        # w_short = 3/103, w_long = 100/103
+        # wValCR = (3/103)(1/5) + (100/103)(10/5)
+        # ≈ 0.0058 + 1.9417 ≈ 1.948
+        expected = (3 / 103) * (1.0 / 5.0) + (100 / 103) * (10.0 / 5.0)
+        assert w == pytest.approx(expected, abs=1e-10)
+
+    def test_empty_returns_inf(self):
+        """Empty segment lists should return inf."""
+        assert weighted_valcr([], [], 5.0) == float("inf")
+
+    def test_length_mismatch_raises(self):
+        """Mismatched OD/length arrays should raise ValueError."""
+        with pytest.raises(ValueError):
+            weighted_valcr([1.0, 2.0], [10], 5.0)
+
+    def test_zero_basesim_uses_epsilon(self):
+        """Zero basesim should use epsilon floor, not divide by 0."""
+        w = weighted_valcr([1.0], [10], basesim=0.0)
+        assert np.isfinite(w)
+        assert w > 0
+
+    def test_single_segment(self):
+        """Single segment wValCR = OD / basesim (weight=1)."""
+        w = weighted_valcr([3.0], [50], basesim=6.0)
+        assert w == pytest.approx(0.5, abs=1e-10)
+
+
+class TestRandomPolicyAdvantage:
+    """Tests for random_policy_advantage metric."""
+
+    def test_agent_better_gives_positive(self):
+        """Agent outperforming random → positive delta (lower ValCR = better)."""
+        delta = random_policy_advantage(agent_valcr=0.8, random_valcr=1.2)
+        assert delta > 0
+
+    def test_agent_worse_gives_negative(self):
+        """Agent underperforming random → negative delta."""
+        delta = random_policy_advantage(agent_valcr=1.5, random_valcr=1.2)
+        assert delta < 0
+
+    def test_exact_match_gives_zero(self):
+        """Same performance → zero delta."""
+        delta = random_policy_advantage(agent_valcr=1.0, random_valcr=1.0)
+        assert delta == pytest.approx(0.0)
+
+    def test_known_value(self):
+        """Known numeric test."""
+        delta = random_policy_advantage(agent_valcr=0.95, random_valcr=1.42)
+        assert delta == pytest.approx(0.47)
+

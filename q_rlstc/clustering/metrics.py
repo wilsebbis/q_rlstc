@@ -200,3 +200,76 @@ def od_improvement_reward(
     """
     improvement = od_before - od_after
     return improvement * scale
+
+
+def weighted_valcr(
+    per_segment_ods: List[float],
+    per_segment_lengths: List[int],
+    basesim: float,
+    epsilon: float = 1e-8,
+) -> float:
+    """Length-weighted Validation Competitive Ratio (wValCR).
+
+    Standard ValCR averages per-segment CRs equally, which creates a
+    fragmentation attractor: many short segments each contribute low
+    distance but equal weight. wValCR reweights by segment length so
+    long, semantically meaningful segments dominate the score.
+
+        wValCR = Σ (len_i / Σ len_j) · (OD_i / basesim)
+
+    Lower is better.  When all segments have equal length this reduces
+    to standard ValCR.
+
+    Args:
+        per_segment_ods: OD (distance to nearest centroid) per segment.
+        per_segment_lengths: Number of GPS points in each segment.
+        basesim: Fold-specific baseline OD (always-extend OD).
+        epsilon: Floor for basesim to prevent divide-by-zero.
+
+    Returns:
+        Length-weighted competitive ratio.
+    """
+    if not per_segment_ods or not per_segment_lengths:
+        return float("inf")
+
+    ods = np.asarray(per_segment_ods, dtype=float)
+    lengths = np.asarray(per_segment_lengths, dtype=float)
+
+    if len(ods) != len(lengths):
+        raise ValueError(
+            f"Length mismatch: {len(ods)} ODs vs {len(lengths)} segment lengths"
+        )
+
+    total_length = lengths.sum()
+    if total_length == 0:
+        return float("inf")
+
+    weights = lengths / total_length  # w_i = len_i / Σ len_j
+    safe_basesim = max(float(basesim), epsilon)
+    per_seg_cr = ods / safe_basesim  # CR_i = OD_i / basesim
+
+    return float(np.dot(weights, per_seg_cr))
+
+
+def random_policy_advantage(
+    agent_valcr: float,
+    random_valcr: float,
+) -> float:
+    """Random-policy advantage at matched CUT budget.
+
+        Δ_rand = random_ValCR - agent_ValCR
+
+    Positive values indicate the agent outperforms random at the same
+    CUT budget — evidence that the agent learned meaningful segment
+    placement rather than exploiting the length-sensitivity degeneracy.
+
+    Convention: lower ValCR = better, so positive Δ_rand = agent wins.
+
+    Args:
+        agent_valcr: Agent's ValCR at the target CUT budget.
+        random_valcr: Random policy's ValCR at the same CUT budget.
+
+    Returns:
+        Advantage delta (positive = agent outperforms random).
+    """
+    return random_valcr - agent_valcr
