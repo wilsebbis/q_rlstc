@@ -252,6 +252,8 @@ def getstaticIED(
     Treats the static point as a zero-length trajectory at ``(static_x,
     static_y)`` and integrates the distance over ``[time_start, time_end]``.
 
+    Optimized Version: Uses NumPy for vectorized distance computation.
+
     Args:
         points: Trajectory points.
         static_x: X-coordinate of the static reference point.
@@ -264,25 +266,35 @@ def getstaticIED(
     """
     overlap_start = max(points[0].t, time_start)
     overlap_end = min(points[-1].t, time_end)
-    total_distance = 0.0
 
     if overlap_start >= overlap_end:
         return 1e10
 
-    static_start = Point(static_x, static_y, 0)
-    static_end = Point(static_x, static_y, 0)
-
+    # Extract timed trajectory points
     windowed_traj = timedTraj(points, overlap_start, overlap_end)
-    for idx in range(windowed_traj.size - 1):
-        static_start.t = windowed_traj.points[idx].t
-        static_end.t = windowed_traj.points[idx + 1].t
-        segment_dist = line2lineIDE(
-            windowed_traj.points[idx], windowed_traj.points[idx + 1],
-            static_start, static_end,
-        )
-        total_distance += segment_dist
+    if not windowed_traj or windowed_traj.size < 2:
+        return 0.0
 
-    return total_distance
+    # Vectorize the computation instead of running a Python loop
+    # Extract coordinates into numpy arrays
+    pts = windowed_traj.points
+    x_arr = np.array([p.x for p in pts])
+    y_arr = np.array([p.y for p in pts])
+    t_arr = np.array([p.t for p in pts])
+    
+    # Distance from all points to the static point
+    dx = x_arr - static_x
+    dy = y_arr - static_y
+    dists = np.sqrt(dx*dx + dy*dy)
+    
+    # Trapezoidal integration: 0.5 * (d_i + d_{i+1}) * (t_{i+1} - t_i)
+    dists_start = dists[:-1]
+    dists_end = dists[1:]
+    dt = t_arr[1:] - t_arr[:-1]
+    
+    total_distance = np.sum(0.5 * (dists_start + dists_end) * dt)
+
+    return float(total_distance)
 
 
 def traj2trajIED(
@@ -354,65 +366,44 @@ def traj2trajIED(
 
     # ── Overlapping region: merge timelines ────────────────────────
     if common_a is not None and common_a.size != 0:
-        current_time = common_a.ts
-        iter_a = 0  # index into common_a
-        iter_b = 0  # index into timed_b
-        prev_point_a = common_a.points[0]
-        prev_point_b = timed_b.points[0]
+        # Extract coordinates and times into numpy arrays
+        pts_a = common_a.points
+        pts_b = timed_b.points
+        
+        t_a = np.array([p.t for p in pts_a])
+        x_a = np.array([p.x for p in pts_a])
+        y_a = np.array([p.y for p in pts_a])
+        
+        t_b = np.array([p.t for p in pts_b])
+        x_b = np.array([p.x for p in pts_b])
+        y_b = np.array([p.y for p in pts_b])
+        
+        # Create a unified sorted timeline of all unique timestamps
+        merged_t = np.unique(np.concatenate([t_a, t_b]))
+        
+        # Interpolate both trajectories onto the merged timeline
+        # np.interp works perfectly since t_a and t_b are monotonically increasing
+        interp_x_a = np.interp(merged_t, t_a, x_a)
+        interp_y_a = np.interp(merged_t, t_a, y_a)
+        
+        interp_x_b = np.interp(merged_t, t_b, x_b)
+        interp_y_b = np.interp(merged_t, t_b, y_b)
+        
+        # Calculate point-wise distances at every timestamp in the merged timeline
+        dx = interp_x_a - interp_x_b
+        dy = interp_y_a - interp_y_b
+        dists = np.sqrt(dx*dx + dy*dy)
+        
+        # Trapezoidal integration over the merged timeline
+        # 0.5 * (d_i + d_{i+1}) * (t_{i+1} - t_i)
+        dists_start = dists[:-1]
+        dists_end = dists[1:]
+        dt = merged_t[1:] - merged_t[:-1]
+        
+        overlap_distance = np.sum(0.5 * (dists_start + dists_end) * dt)
+        total_distance += float(overlap_distance)
 
-        while current_time != timed_b.te:
-            next_time_b = timed_b.points[iter_b + 1].t
-            next_time_a = common_a.points[iter_a + 1].t
-
-            if next_time_b == next_time_a:
-                # Both trajectories have a point at the same time
-                next_point_a = common_a.points[iter_a + 1]
-                next_point_b = timed_b.points[iter_b + 1]
-                iter_a += 1
-                iter_b += 1
-                new_time = next_time_b
-            elif next_time_b < next_time_a:
-                # B has the next point — interpolate A at that time
-                t_interp = timed_b.points[iter_b + 1].t
-                interp_x = makemid(
-                    common_a.points[iter_a].x, common_a.points[iter_a].t,
-                    common_a.points[iter_a + 1].x, common_a.points[iter_a + 1].t,
-                    t_interp,
-                )
-                interp_y = makemid(
-                    common_a.points[iter_a].y, common_a.points[iter_a].t,
-                    common_a.points[iter_a + 1].y, common_a.points[iter_a + 1].t,
-                    t_interp,
-                )
-                next_point_a = Point(interp_x, interp_y, t_interp)
-                next_point_b = timed_b.points[iter_b + 1]
-                iter_b += 1
-                new_time = t_interp
-            else:
-                # A has the next point — interpolate B at that time
-                t_interp = common_a.points[iter_a + 1].t
-                interp_x = makemid(
-                    timed_b.points[iter_b].x, timed_b.points[iter_b].t,
-                    timed_b.points[iter_b + 1].x, timed_b.points[iter_b + 1].t,
-                    t_interp,
-                )
-                interp_y = makemid(
-                    timed_b.points[iter_b].y, timed_b.points[iter_b].t,
-                    timed_b.points[iter_b + 1].y, timed_b.points[iter_b + 1].t,
-                    t_interp,
-                )
-                next_point_b = Point(interp_x, interp_y, t_interp)
-                next_point_a = common_a.points[iter_a + 1]
-                iter_a += 1
-                new_time = t_interp
-
-            current_time = new_time
-            segment_dist = line2lineIDE(prev_point_a, next_point_a, prev_point_b, next_point_b)
-            total_distance += segment_dist
-            prev_point_a = next_point_a
-            prev_point_b = next_point_b
-
-    return total_distance
+    return float(total_distance)
 
 
 # ─── Fréchet Distance ──────────────────────────────────────────────────

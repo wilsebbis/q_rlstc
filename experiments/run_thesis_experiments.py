@@ -2191,6 +2191,15 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     plot_dir = output_dir / "plots"
 
+    def save_intermediate_state(results_dict: Dict[str, Any], current_tee: TeePrinter):
+        """Save JSON, Markdown, and plots incrementally so data isn't lost on crash."""
+        print(f"\n  [Auto-Save] Saving intermediate results to {output_dir}...")
+        try:
+            generate_plots(results_dict, plot_dir)
+            generate_report(results_dict, output_dir, current_tee.getvalue())
+        except Exception as e:
+            print(f"  [Auto-Save Error] Could not save intermediate state: {e}")
+
     # ── Plots-only mode ──────────────────────────────────────────
     if args.plots_only:
         with open(args.plots_only) as f:
@@ -2234,6 +2243,7 @@ def main():
             d1_result = run_d1_valcr_sweep(
                 args.traj_path, args.centers_path, d1_n, args.seed)
             all_results["D1"] = d1_result
+            save_intermediate_state(all_results, tee)
 
         # ── D4: Policy basin test ────────────────────────────────
         if "D4" in selected:
@@ -2241,6 +2251,7 @@ def main():
             d4_result = run_d4_policy_basin(
                 args.traj_path, args.centers_path, d4_n, args.seed)
             all_results["D4"] = d4_result
+            save_intermediate_state(all_results, tee)
 
         # ── E1: Core Quantum Utility ─────────────────────────────
         if "E1" in selected:
@@ -2263,6 +2274,7 @@ def main():
                     e1_results.append(r)
                 all_results["E1"] = e1_results
                 print_summary_table(e1_results, "E1: Core Quantum Utility")
+            save_intermediate_state(all_results, tee)
 
         # ── E2: NISQ Viability ───────────────────────────────────
         if "E2" in selected:
@@ -2278,6 +2290,7 @@ def main():
                 e2_results.append(r)
             all_results["E2"] = e2_results
             print_summary_table(e2_results, "E2: NISQ Viability")
+            save_intermediate_state(all_results, tee)
 
         # ── E3: Shot Sensitivity ─────────────────────────────────
         if "E3" in selected:
@@ -2293,6 +2306,7 @@ def main():
                 e3_results.append(r)
             all_results["E3"] = e3_results
             print_summary_table(e3_results, "E3: Shot Sensitivity")
+            save_intermediate_state(all_results, tee)
 
         # ── E4: Drift Resilience ─────────────────────────────────
         if "E4" in selected:
@@ -2308,6 +2322,7 @@ def main():
                 e4_results.append(r)
             all_results["E4"] = e4_results
             print_summary_table(e4_results, "E4: Drift Resilience")
+            save_intermediate_state(all_results, tee)
 
         # ── E5: Low-Data ─────────────────────────────────────────
         if "E5" in selected:
@@ -2323,6 +2338,7 @@ def main():
                 e5_results.append(r)
             all_results["E5"] = e5_results
             print_summary_table(e5_results, "E5: Low-Data Generalization")
+            save_intermediate_state(all_results, tee)
 
         # ── E6: Version Progression ──────────────────────────────
         if "E6" in selected:
@@ -2338,12 +2354,14 @@ def main():
                 e6_results.append(r)
             all_results["E6"] = e6_results
             print_summary_table(e6_results, "E6: Version Progression")
+            save_intermediate_state(all_results, tee)
 
         # ── S1: Scalability ──────────────────────────────────────
         if "S1" in selected:
             s1_result = run_s1_scalability(
                 args.traj_path, args.centers_path, args.seed)
             all_results["S1"] = s1_result
+            save_intermediate_state(all_results, tee)
 
         # ── AB1: Entanglement Ablation ───────────────────────────────
         if "AB1" in selected:
@@ -2366,6 +2384,7 @@ def main():
                     ab1_results.append(r)
                 all_results["AB1"] = ab1_results
                 print_summary_table(ab1_results, "AB1: Entanglement Ablation")
+            save_intermediate_state(all_results, tee)
 
         # ── E7: Configuration Sweep ──────────────────────────────
         if "E7" in selected:
@@ -2390,6 +2409,7 @@ def main():
                     e7_results.append(r)
                 all_results["E7"] = e7_results
                 print_summary_table(e7_results, "E7: Configuration Sweep")
+            save_intermediate_state(all_results, tee)
 
         # ── E8: Data Scaling ──────────────────────────────────────
         if "E8" in selected:
@@ -2409,6 +2429,7 @@ def main():
                     e8_results.append(r)
             all_results["E8"] = e8_results
             print_summary_table(e8_results, "E8: Data Scaling")
+            save_intermediate_state(all_results, tee)
 
         # ── E9: Quantum B ──────────────────────────────────────────
         if "E9" in selected:
@@ -2425,6 +2446,7 @@ def main():
                     e9_results.append(r)
             all_results["E9"] = e9_results
             print_summary_table(e9_results, "E9: Quantum B")
+            save_intermediate_state(all_results, tee)
 
         # ── RA1: Reward Ablation ─────────────────────────────────
         if "RA1" in selected:
@@ -2432,6 +2454,7 @@ def main():
                 args.traj_path, args.centers_path,
                 min(args.amount, 30), args.epochs, args.seed)
             all_results["RA1"] = ra1_result
+            save_intermediate_state(all_results, tee)
 
         # ── PARITY: RLSTC Parity Comparison ──────────────────────
         if "PARITY" in selected:
@@ -2455,6 +2478,7 @@ def main():
                     parity_results.append(r)
                 all_results["PARITY"] = parity_results
                 print_summary_table(parity_results, "PARITY: RLSTC Parity")
+            save_intermediate_state(all_results, tee)
 
         # ── Grand summary ────────────────────────────────────────
         print(f"\n{'═'*70}")

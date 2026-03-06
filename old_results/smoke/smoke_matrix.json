@@ -1,0 +1,320 @@
+{
+  "metadata": {
+    "timestamp": "2026-03-05T07:58:54.574144",
+    "python": "3.13.12 (main, Mar  3 2026, 15:32:44) [Clang 21.1.4 ]",
+    "numpy": "2.4.1",
+    "git_hash": "1e9b7064b1fd1c64e05c6d7301f6d98a8ae1a279",
+    "qiskit": "2.3.0"
+  },
+  "config": {
+    "n_trajectories": 100,
+    "n_epochs": 1,
+    "seeds": [
+      42,
+      7
+    ]
+  },
+  "results": {
+    "CTRL-VQ": {
+      "description": "Controlled SPSA / VQ-DQN (statevector)",
+      "is_parity": false,
+      "has_lagrangian": true,
+      "runs": [
+        {
+          "seed": 42,
+          "elapsed_s": 1425.0423278808594,
+          "errors": [
+            "[CTRL-VQ/s42] Missing required field: seed",
+            "[CTRL-VQ/s42] Missing required field: best_greedy_cut_pct",
+            "[CTRL-VQ/s42] Missing required field: model_name",
+            "[CTRL-VQ/s42] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": 0.12,
+          "val_wvalcr": 0.0022003475038903115,
+          "budget_violated": false
+        },
+        {
+          "seed": 7,
+          "elapsed_s": 1425.2981688976288,
+          "errors": [
+            "[CTRL-VQ/s7] Missing required field: seed",
+            "[CTRL-VQ/s7] Missing required field: best_greedy_cut_pct",
+            "[CTRL-VQ/s7] Missing required field: model_name",
+            "[CTRL-VQ/s7] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": 0.12,
+          "val_wvalcr": 0.0011936022917164002,
+          "budget_violated": false
+        }
+      ]
+    },
+    "CTRL-CL": {
+      "description": "Controlled SPSA / Classical DQN [64]",
+      "is_parity": false,
+      "has_lagrangian": true,
+      "runs": [
+        {
+          "seed": 42,
+          "elapsed_s": 30.943086862564087,
+          "errors": [
+            "[CTRL-CL/s42] Missing required field: seed",
+            "[CTRL-CL/s42] Missing required field: best_greedy_cut_pct",
+            "[CTRL-CL/s42] Missing required field: model_name",
+            "[CTRL-CL/s42] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": 0.12,
+          "val_wvalcr": 0.0015099258570797315,
+          "budget_violated": false
+        },
+        {
+          "seed": 7,
+          "elapsed_s": 30.636470079421997,
+          "errors": [
+            "[CTRL-CL/s7] Missing required field: seed",
+            "[CTRL-CL/s7] Missing required field: best_greedy_cut_pct",
+            "[CTRL-CL/s7] Missing required field: model_name",
+            "[CTRL-CL/s7] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": 0.12,
+          "val_wvalcr": 0.0011936022917164002,
+          "budget_violated": false
+        }
+      ]
+    },
+    "PAR-VQ": {
+      "description": "RLSTC Parity / VQ-DQN (statevector)",
+      "is_parity": true,
+      "has_lagrangian": false,
+      "runs": [
+        {
+          "seed": 42,
+          "elapsed_s": 1405.3089818954468,
+          "errors": [
+            "[PAR-VQ/s42] Missing required field: seed",
+            "[PAR-VQ/s42] Missing required field: best_greedy_cut_pct",
+            "[PAR-VQ/s42] Missing required field: model_name",
+            "[PAR-VQ/s42] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": null,
+          "val_wvalcr": 0.001449548338686858,
+          "budget_violated": false
+        },
+        {
+          "seed": 7,
+          "elapsed_s": 1403.2016389369965,
+          "errors": [
+            "[PAR-VQ/s7] Missing required field: seed",
+            "[PAR-VQ/s7] Missing required field: best_greedy_cut_pct",
+            "[PAR-VQ/s7] Missing required field: model_name",
+            "[PAR-VQ/s7] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": null,
+          "val_wvalcr": 0.004510377402657979,
+          "budget_violated": false
+        }
+      ]
+    },
+    "PAR-ORIG": {
+      "description": "RLSTC Parity / Original 5\u219264\u21922 DQN",
+      "is_parity": true,
+      "has_lagrangian": false,
+      "runs": [
+        {
+          "seed": 42,
+          "elapsed_s": 14.341946125030518,
+          "errors": [
+            "[PAR-ORIG/s42] Missing required field: seed",
+            "[PAR-ORIG/s42] Missing required field: best_greedy_cut_pct",
+            "[PAR-ORIG/s42] Missing required field: model_name",
+            "[PAR-ORIG/s42] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": null,
+          "val_wvalcr": 0.0013740469723803866,
+          "budget_violated": false
+        },
+        {
+          "seed": 7,
+          "elapsed_s": 12.979926109313965,
+          "errors": [
+            "[PAR-ORIG/s7] Missing required field: seed",
+            "[PAR-ORIG/s7] Missing required field: best_greedy_cut_pct",
+            "[PAR-ORIG/s7] Missing required field: model_name",
+            "[PAR-ORIG/s7] Missing required field: best_val_cr",
+            "[PAR-ORIG/s7] \u26a0 budget_violated=True (informational, not fatal)"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": null,
+          "val_wvalcr": 0.025588972126214627,
+          "budget_violated": true
+        }
+      ]
+    },
+    "LAG-ON": {
+      "description": "Lagrangian ON (USE_LAGRANGIAN=True)",
+      "is_parity": false,
+      "has_lagrangian": true,
+      "runs": [
+        {
+          "seed": 42,
+          "elapsed_s": 1422.5866661071777,
+          "errors": [
+            "[LAG-ON/s42] Missing required field: seed",
+            "[LAG-ON/s42] Missing required field: best_greedy_cut_pct",
+            "[LAG-ON/s42] Missing required field: model_name",
+            "[LAG-ON/s42] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": 0.12,
+          "val_wvalcr": 0.0022003475038903115,
+          "budget_violated": false
+        },
+        {
+          "seed": 7,
+          "elapsed_s": 1424.199377298355,
+          "errors": [
+            "[LAG-ON/s7] Missing required field: seed",
+            "[LAG-ON/s7] Missing required field: best_greedy_cut_pct",
+            "[LAG-ON/s7] Missing required field: model_name",
+            "[LAG-ON/s7] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": 0.12,
+          "val_wvalcr": 0.0011936022917164002,
+          "budget_violated": false
+        }
+      ]
+    },
+    "LAG-OFF": {
+      "description": "Lagrangian OFF (USE_LAGRANGIAN=False \u2014 for A/B comparison)",
+      "is_parity": false,
+      "has_lagrangian": false,
+      "runs": [
+        {
+          "seed": 42,
+          "elapsed_s": 1423.885982990265,
+          "errors": [
+            "[LAG-OFF/s42] Missing required field: seed",
+            "[LAG-OFF/s42] Missing required field: best_greedy_cut_pct",
+            "[LAG-OFF/s42] Missing required field: model_name",
+            "[LAG-OFF/s42] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": null,
+          "val_wvalcr": 0.0022003475038903115,
+          "budget_violated": false
+        },
+        {
+          "seed": 7,
+          "elapsed_s": 1424.358379125595,
+          "errors": [
+            "[LAG-OFF/s7] Missing required field: seed",
+            "[LAG-OFF/s7] Missing required field: best_greedy_cut_pct",
+            "[LAG-OFF/s7] Missing required field: model_name",
+            "[LAG-OFF/s7] Missing required field: best_val_cr"
+          ],
+          "warnings": [],
+          "best_val_cr": null,
+          "best_cut_pct": null,
+          "final_lambda": null,
+          "val_wvalcr": 0.0011936022917164002,
+          "budget_violated": false
+        }
+      ]
+    }
+  },
+  "errors": [
+    "[CTRL-VQ/s42] Missing required field: seed",
+    "[CTRL-VQ/s42] Missing required field: best_greedy_cut_pct",
+    "[CTRL-VQ/s42] Missing required field: model_name",
+    "[CTRL-VQ/s42] Missing required field: best_val_cr",
+    "[CTRL-VQ/s7] Missing required field: seed",
+    "[CTRL-VQ/s7] Missing required field: best_greedy_cut_pct",
+    "[CTRL-VQ/s7] Missing required field: model_name",
+    "[CTRL-VQ/s7] Missing required field: best_val_cr",
+    "[CTRL-CL/s42] Missing required field: seed",
+    "[CTRL-CL/s42] Missing required field: best_greedy_cut_pct",
+    "[CTRL-CL/s42] Missing required field: model_name",
+    "[CTRL-CL/s42] Missing required field: best_val_cr",
+    "[CTRL-CL/s7] Missing required field: seed",
+    "[CTRL-CL/s7] Missing required field: best_greedy_cut_pct",
+    "[CTRL-CL/s7] Missing required field: model_name",
+    "[CTRL-CL/s7] Missing required field: best_val_cr",
+    "[PAR-VQ/s42] Missing required field: seed",
+    "[PAR-VQ/s42] Missing required field: best_greedy_cut_pct",
+    "[PAR-VQ/s42] Missing required field: model_name",
+    "[PAR-VQ/s42] Missing required field: best_val_cr",
+    "[PAR-VQ/s7] Missing required field: seed",
+    "[PAR-VQ/s7] Missing required field: best_greedy_cut_pct",
+    "[PAR-VQ/s7] Missing required field: model_name",
+    "[PAR-VQ/s7] Missing required field: best_val_cr",
+    "[PAR-ORIG/s42] Missing required field: seed",
+    "[PAR-ORIG/s42] Missing required field: best_greedy_cut_pct",
+    "[PAR-ORIG/s42] Missing required field: model_name",
+    "[PAR-ORIG/s42] Missing required field: best_val_cr",
+    "[PAR-ORIG/s7] Missing required field: seed",
+    "[PAR-ORIG/s7] Missing required field: best_greedy_cut_pct",
+    "[PAR-ORIG/s7] Missing required field: model_name",
+    "[PAR-ORIG/s7] Missing required field: best_val_cr",
+    "[PAR-ORIG/s7] \u26a0 budget_violated=True (informational, not fatal)",
+    "[LAG-ON/s42] Missing required field: seed",
+    "[LAG-ON/s42] Missing required field: best_greedy_cut_pct",
+    "[LAG-ON/s42] Missing required field: model_name",
+    "[LAG-ON/s42] Missing required field: best_val_cr",
+    "[LAG-ON/s7] Missing required field: seed",
+    "[LAG-ON/s7] Missing required field: best_greedy_cut_pct",
+    "[LAG-ON/s7] Missing required field: model_name",
+    "[LAG-ON/s7] Missing required field: best_val_cr",
+    "[LAG-OFF/s42] Missing required field: seed",
+    "[LAG-OFF/s42] Missing required field: best_greedy_cut_pct",
+    "[LAG-OFF/s42] Missing required field: model_name",
+    "[LAG-OFF/s42] Missing required field: best_val_cr",
+    "[LAG-OFF/s7] Missing required field: seed",
+    "[LAG-OFF/s7] Missing required field: best_greedy_cut_pct",
+    "[LAG-OFF/s7] Missing required field: model_name",
+    "[LAG-OFF/s7] Missing required field: best_val_cr"
+  ],
+  "warnings": [],
+  "timings": {
+    "CTRL-VQ/s42": 1425.0423278808594,
+    "CTRL-VQ/s7": 1425.2981688976288,
+    "CTRL-CL/s42": 30.943086862564087,
+    "CTRL-CL/s7": 30.636470079421997,
+    "PAR-VQ/s42": 1405.3089818954468,
+    "PAR-VQ/s7": 1403.2016389369965,
+    "PAR-ORIG/s42": 14.341946125030518,
+    "PAR-ORIG/s7": 12.979926109313965,
+    "LAG-ON/s42": 1422.5866661071777,
+    "LAG-ON/s7": 1424.199377298355,
+    "LAG-OFF/s42": 1423.885982990265,
+    "LAG-OFF/s7": 1424.358379125595
+  }
+}
