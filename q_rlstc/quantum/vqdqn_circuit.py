@@ -117,8 +117,9 @@ class VQDQNCircuitBuilder:
             qr: Quantum register.
             angles: Encoded feature angles.
         """
+        num_angles = len(angles)
         for i in range(self.n_qubits):
-            circuit.ry(float(angles[i]), qr[i])
+            circuit.ry(float(angles[i % num_angles]), qr[i])
     
     def _add_variational_layer(
         self,
@@ -414,8 +415,9 @@ def _fast_vqc_probs(
     angles = 2.0 * np.arctan(state)
     
     # Apply initial encoding layer
+    num_angles = len(angles)
     for q in range(n_qubits):
-        psi = _apply_ry(psi, float(angles[q]), q)
+        psi = _apply_ry(psi, float(angles[q % num_angles]), q)
     
     # Variational layers
     n_params_per_layer = n_qubits * 2
@@ -443,7 +445,7 @@ def _fast_vqc_probs(
         # Data re-uploading (not after last layer)
         if use_data_reuploading and layer < n_layers - 1:
             for q in range(n_qubits):
-                psi = _apply_ry(psi, float(angles[q]), q)
+                psi = _apply_ry(psi, float(angles[q % num_angles]), q)
     
     return np.abs(psi) ** 2
 
