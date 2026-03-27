@@ -1,0 +1,121 @@
+{
+  "budgets": [
+    0.05,
+    0.1,
+    0.15,
+    0.2,
+    0.3
+  ],
+  "runs": [
+    {
+      "seed": 1,
+      "points": [
+        {
+          "target_budget": 0.05,
+          "realized_cut": 0.05603448275862069,
+          "val_cr": 1.0089962978347142
+        },
+        {
+          "target_budget": 0.1,
+          "realized_cut": 0.11422413793103449,
+          "val_cr": 0.985504849070302
+        },
+        {
+          "target_budget": 0.15,
+          "realized_cut": 0.16810344827586207,
+          "val_cr": 0.9661275301707848
+        },
+        {
+          "target_budget": 0.2,
+          "realized_cut": 0.2165948275862069,
+          "val_cr": 0.969145334206589
+        },
+        {
+          "target_budget": 0.3,
+          "realized_cut": 0.3254310344827586,
+          "val_cr": 0.9723996904745328
+        }
+      ]
+    },
+    {
+      "seed": 42,
+      "points": [
+        {
+          "target_budget": 0.05,
+          "realized_cut": 0.04418103448275862,
+          "val_cr": 0.9783074251224231
+        },
+        {
+          "target_budget": 0.1,
+          "realized_cut": 0.09590517241379311,
+          "val_cr": 0.9619639827384157
+        },
+        {
+          "target_budget": 0.15,
+          "realized_cut": 0.14655172413793102,
+          "val_cr": 0.9520900402384318
+        },
+        {
+          "target_budget": 0.2,
+          "realized_cut": 0.20581896551724138,
+          "val_cr": 0.9809291843103962
+        },
+        {
+          "target_budget": 0.3,
+          "realized_cut": 0.3081896551724138,
+          "val_cr": 0.985397710629513
+        }
+      ]
+    },
+    {
+      "seed": 123,
+      "points": [
+        {
+          "target_budget": 0.05,
+          "realized_cut": 0.05818965517241379,
+          "val_cr": 0.9266011492092917
+        },
+        {
+          "target_budget": 0.1,
+          "realized_cut": 0.10344827586206896,
+          "val_cr": 0.9713996590112064
+        },
+        {
+          "target_budget": 0.15,
+          "realized_cut": 0.15193965517241378,
+          "val_cr": 0.9821989540520598
+        },
+        {
+          "target_budget": 0.2,
+          "realized_cut": 0.2101293103448276,
+          "val_cr": 0.9943992089503854
+        },
+        {
+          "target_budget": 0.3,
+          "realized_cut": 0.3114224137931034,
+          "val_cr": 0.9644007502622217
+        }
+      ]
+    }
+  ],
+  "aggregated_metrics": {
+    "median_valcr_overall": 0.9723996904745328,
+    "iqr_valcr_overall": 0.0185341921242832,
+    "collapse_stats": {
+      "low_collapse": 0.0,
+      "high_collapse": 0.0,
+      "total_collapse": 0.0
+    },
+    "best_worst_spread": 0.08239514862542252,
+    "pareto_frontier": {
+      "cuts": [
+        0.04418103448275862,
+        0.05818965517241379
+      ],
+      "valcrs": [
+        0.9783074251224231,
+        0.9266011492092917
+      ]
+    }
+  }
+}

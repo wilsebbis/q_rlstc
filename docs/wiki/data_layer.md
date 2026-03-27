@@ -19,6 +19,7 @@ The **data layer** (`q_rlstc/data/`) contains all trajectory data structures, di
 | `rlstc_mdp.py` | `TrajRLclus` — MDP environment for RL-based trajectory segmentation |
 | `preprocessing.py` | GPS filtering, length normalization, z-score normalization, MDL simplification |
 | `trajectory_scheduler.py` | `TrajectoryScheduler` — controls trajectory sampling across epochs |
+| `dataset_loader.py` | `DatasetLoader` (ABC), `CustomDatasetLoader`, `DatasetConfig` — abstract dataset loading interface |
 
 ## Class Hierarchy
 

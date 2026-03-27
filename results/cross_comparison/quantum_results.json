@@ -1,0 +1,10 @@
+{
+  "system": "quantum_qrlstc_v_d",
+  "param_count": 34,
+  "training_cr": [],
+  "validation_cr": [],
+  "elapsed_time": 18.648363828659058,
+  "final_training_cr": null,
+  "final_validation_cr": null,
+  "checkpoint_path": "results/cross_comparison/quantum_agent.npz"
+}

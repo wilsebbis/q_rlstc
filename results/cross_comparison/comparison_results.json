@@ -1,0 +1,22 @@
+{
+  "classical": {
+    "system": "classical_rlstc",
+    "param_count": 514,
+    "training_cr": [],
+    "validation_cr": [],
+    "elapsed_time": 1.6078341007232666,
+    "final_training_cr": null,
+    "final_validation_cr": null,
+    "model_path": "results/cross_comparison/classical_model.npz"
+  },
+  "quantum": {
+    "system": "quantum_qrlstc_v_d",
+    "param_count": 34,
+    "training_cr": [],
+    "validation_cr": [],
+    "elapsed_time": 6.722582101821899,
+    "final_training_cr": null,
+    "final_validation_cr": null,
+    "checkpoint_path": "results/cross_comparison/quantum_agent.npz"
+  }
+}

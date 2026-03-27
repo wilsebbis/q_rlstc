@@ -250,30 +250,21 @@ def run_classical_experiment(
     env = TrajRLclus(traj_path, centers_path, centers_path)
     RL = NumpyDQN(env.n_features, env.n_actions, seed=seed)
 
-    # Static normalization scale: divide IED-scale features by basesim_T
-    # so they become ratios ≈ 1.0-2.0, matching features 3-4 which are [0,1]
-    _ied_scale = max(env.basesim_T, 1e-8)
+    from q_rlstc.data.observation_tracker import ObservationTracker
+    from q_rlstc.rl.cmdp import CutBudgetConstraint, LagrangeMultiplier, constraint_cost
+    from q_rlstc.rl.reward_shaping import base_geometric_reward, penalized_reward
 
-    def normalize_obs(obs):
-        """Scale IED features (0,1,2) by basesim — deterministic, replay-safe."""
-        o = obs.copy().flatten()
-        o[0] /= _ied_scale       # overall_sim → ratio ≈ 1.0
-        o[1] /= _ied_scale       # split_overdist → ratio ≈ 1.0
-        o[2] /= _ied_scale * 10  # overall_sim*10 → ratio ≈ 1.0
-        return o.reshape(obs.shape)
-
-    def scale_reward(r):
-        """Scale raw IED-delta reward to O(0.01-0.1) then clip."""
-        return float(np.clip(r / _ied_scale, -1.0, 1.0))
+    # ── CMDP Constraints & Observation Tracking ──────────
+    obs_tracker = ObservationTracker(feature_dim=5, clip=3.0, warmup_steps=1000)
+    budget_constraint = CutBudgetConstraint(beta=0.15) 
+    lagrange = LagrangeMultiplier(init_lambda=0.12, lr_lambda=0.01, clamp_min=0.0, clamp_max=2.0)
 
     # ── Reward alignment constants ─────────────────────────────────
     L_MIN = 3           # Min steps before CUT is allowed
-    CUT_PENALTY = 0.12  # Per-cut penalty (gentle nudge from 0.1)
     EXTEND_COST = 0.01  # Per-step cost for EXTEND (prevents never-cut basin)
 
     print(f"  Parameters: {RL.param_count}")
-    print(f"  basesim_T (IED scale): {_ied_scale:.4f}")
-    print(f"  Reward fixes: L_min={L_MIN}, λ_cut={CUT_PENALTY}, λ_ext={EXTEND_COST}")
+    print(f"  Reward fixes: L_min={L_MIN}, λ_ext={EXTEND_COST}")
 
     # Training loop
     batch_size = 32
@@ -294,6 +285,8 @@ def run_classical_experiment(
         ep_rewards = []   # Per-episode reward accumulator
         ep_q_maxes = []   # Track max Q-values
         ep_seg_counts = []  # Segment count per episode
+        round_cuts = 0
+        round_actions = 0
 
         # ε reset at Round 2: re-enable exploration
         if round_num > 0:
@@ -314,46 +307,51 @@ def run_classical_experiment(
                       f"ε={RL.epsilon:.3f}{diag}", flush=True)
 
             observation, steps = env.reset(episode, "T")
-            # Extract raw split_overdist for potential shaping
             raw_split_od = observation.flatten()[1]
-            observation = normalize_obs(observation)
+            observation = obs_tracker.normalize(observation.flatten())
             episode_reward = 0.0
             seg_len = 0        # Steps in current segment
             n_cuts = 0         # CUT count this episode
+            ep_actions = 0
 
             for index in range(1, steps):
                 done = (index == steps - 1)
-                action = RL.act(observation)
+                
+                # Reshape for the manual classical network
+                action = RL.act(observation.reshape(1, -1))
 
                 # Min segment length: force EXTEND if too short
                 seg_len += 1
                 if action == 1 and seg_len < L_MIN:
                     action = 0  # override to EXTEND
 
-                observation_, reward = env.step(episode, action, index, "T")
+                observation_, raw_env_reward = env.step(episode, action, index, "T")
 
-                # Extract raw split_overdist BEFORE normalizing
                 raw_split_od_next = observation_.flatten()[1]
 
-                # Potential-based shaping for EXTEND (MDP returns 0)
-                # Uses split_overdist delta: positive when extending
-                # makes the projected cut-point OD better
-                if action == 0 and reward == 0:
-                    reward = raw_split_od - raw_split_od_next
+                base_geom = 0.0
+                if action == 0 and raw_env_reward == 0:
+                    base_geom = raw_split_od - raw_split_od_next
+                else:
+                    base_geom = raw_env_reward
 
-                # Scale reward
-                reward = scale_reward(reward)
+                base_geom = float(np.clip(base_geom / max(env.basesim_T, 1e-8), -1.0, 1.0))
+
+                # Apply CMDP penalty
+                cost = constraint_cost(action)
+                reward = penalized_reward(base_geom, cost, lagrange.value())
 
                 # Per-action costs
                 if action == 0:
                     reward -= EXTEND_COST  # Prevent never-cut basin
                 if action == 1:
-                    reward -= CUT_PENALTY
                     n_cuts += 1
                     seg_len = 0  # Reset after CUT
+                    
+                ep_actions += 1
 
                 raw_split_od = raw_split_od_next
-                observation_ = normalize_obs(observation_)
+                observation_ = obs_tracker.normalize(observation_.flatten())
 
                 episode_reward += reward
                 RL.remember(observation, action, reward, observation_, done)
@@ -366,6 +364,8 @@ def run_classical_experiment(
 
             ep_rewards.append(episode_reward)
             ep_seg_counts.append(n_cuts + 1)  # segments = cuts + 1
+            round_cuts += n_cuts
+            round_actions += ep_actions
 
             # Track Q-values for diagnostics
             test_state = observation.flatten() if observation.ndim > 1 else observation
@@ -378,40 +378,73 @@ def run_classical_experiment(
 
             # Periodic evaluation
             if ep_idx % 100 == 0 and ep_idx != 0:
+                empirical_cut_rate = round_cuts / max(round_actions, 1)
+                new_lambda = lagrange.update(empirical_cut_rate, budget_constraint)
+                
+                round_cuts = 0
+                round_actions = 0
+                
                 # Validation CR — track action distribution
                 env.allsubtrajs_E = []
                 val_n_extend, val_n_cut = 0, 0
                 for e in range(sidx, eidx):
                     obs, s = env.reset(e, "E")
-                    obs = normalize_obs(obs)
+                    obs = obs_tracker.normalize(obs.flatten(), update=False)
                     for idx in range(1, s):
-                        act = RL.online_act(obs)
+                        act = RL.online_act(obs.reshape(1,-1))
                         if act == 0:
                             val_n_extend += 1
                         else:
                             val_n_cut += 1
                         obs, _ = env.step(e, act, idx, "E")
-                        obs = normalize_obs(obs)
+                        obs = obs_tracker.normalize(obs.flatten(), update=False)
 
                 val_od = compute_overdist(env.clusters_E)
                 val_cr = float(val_od / env.basesim_E)
+                
+                # New metrics tracking
+                from q_rlstc.data.rlstc_cluster import compute_overdist_per_point, compute_overdist_length_weighted, compute_sse
+                val_n_od = compute_overdist_per_point(env.clusters_E)
+                val_nvalcr = float(val_n_od / env.basesim_E)
+                val_w_od = compute_overdist_length_weighted(env.clusters_E)
+                val_wvalcr = float(val_w_od / env.basesim_E)
+                val_sse = float(compute_sse(env.clusters_E))
+                
+                # Segment tracking
+                n_segments_val = sum(len(c[4]) for c in env.clusters_E.values() if len(c) > 4)
 
                 train_od = compute_overdist(env.clusters_T)
                 train_cr = float(train_od / env.basesim_T)
 
                 results["training_cr"].append(train_cr)
                 results["validation_cr"].append(val_cr)
+                
+                val_total = val_n_extend + val_n_cut
+                cut_pct = 100 * val_n_cut / val_total if val_total else 0
+                
+                if "history" not in results:
+                    results["history"] = []
+                results["history"].append({
+                    "ep": ep_idx,
+                    "val_cr": val_cr,
+                    "nvalcr": val_nvalcr,
+                    "wvalcr": val_wvalcr,
+                    "sse": val_sse,
+                    "cut_pct": cut_pct,
+                    "n_segments": n_segments_val
+                })
 
                 improved = " ★" if val_cr < best_val_cr else ""
                 best_val_cr = min(best_val_cr, val_cr)
                 val_total = val_n_extend + val_n_cut
                 cut_pct = 100 * val_n_cut / val_total if val_total else 0
+                emp_pct = 100 * empirical_cut_rate
 
                 print(f"  Round {round_num+1}, ep {ep_idx}: "
                       f"Train CR={train_cr:.4f}, Val CR={val_cr:.4f}"
                       f" | Q̄max={np.mean(ep_q_maxes[-100:]):.4f}"
                       f" | R̄={np.mean(ep_rewards[-100:]):+.4f}"
-                      f" | CUT={cut_pct:.0f}%{improved}")
+                      f" | Val CUT={cut_pct:.0f}% (β={budget_constraint.beta*100:.0f}%, λ={new_lambda:.3f}){improved}")
 
                 # Reset eval clusters
                 for i in env.clusters_E.keys():
@@ -448,6 +481,7 @@ def run_quantum_experiment(
     amount: int,
     output_dir: Path,
     seed: int = 42,
+    adaptive_shots: bool = False,
 ) -> dict:
     """Run Q-RLSTC Version D on the same RLSTCcode MDP.
 
@@ -467,10 +501,14 @@ def run_quantum_experiment(
     print("  QUANTUM EXPERIMENT (Q-RLSTC Version D — VQC 5q×3L)")
     print("=" * 60)
 
+    # ── Agent setup (matches classical hyperparams) ───────────────
     from q_rlstc.data.rlstc_mdp import TrajRLclus
     from q_rlstc.data.rlstc_cluster import compute_overdist
     from q_rlstc.rl.vqdqn_agent import VQDQNAgent, AgentConfig
     from q_rlstc.rl.replay_buffer import ReplayBuffer
+    from q_rlstc.data.observation_tracker import ObservationTracker
+    from q_rlstc.rl.cmdp import CutBudgetConstraint, LagrangeMultiplier, constraint_cost
+    from q_rlstc.rl.reward_shaping import base_geometric_reward, penalized_reward
 
     np.random.seed(seed)
     random.seed(seed)
@@ -484,8 +522,10 @@ def run_quantum_experiment(
         epsilon_start=1.0,
         epsilon_min=0.1,
         epsilon_decay=0.995,   # Slower decay: reaches 0.1 at ep ~460
-        shots=0,            # 0 = statevector (exact, noiseless)
+        shots=1024 if adaptive_shots else 0, # 0 = exact, 1024 = noisy base limit
         target_update_freq=10,
+        adaptive_shots=adaptive_shots,
+        confidence_delta=0.05,
     )
     agent = VQDQNAgent(config=agent_cfg, seed=seed)
     buffer = ReplayBuffer(max_size=5000, seed=seed)
@@ -499,23 +539,16 @@ def run_quantum_experiment(
 
     env = TrajRLclus(traj_path, centers_path, centers_path)
 
-    # Same static normalization as classical
-    _ied_scale = max(env.basesim_T, 1e-8)
+    # ── CMDP Constraints & Observation Tracking ──────────
+    # Normalize with moving z-score tracker instead of static max-scaling
+    obs_tracker = ObservationTracker(feature_dim=5, clip=3.0, warmup_steps=1000)
 
-    def normalize_obs(obs):
-        o = obs.copy().flatten()
-        o[0] /= _ied_scale
-        o[1] /= _ied_scale
-        o[2] /= _ied_scale * 10
-        return o.reshape(obs.shape)
+    # CMDP logic instead of hardcoded CUT_PENALTY
+    budget_constraint = CutBudgetConstraint(beta=0.15) # Target 15% budget
+    lagrange = LagrangeMultiplier(init_lambda=0.12, lr_lambda=0.01, clamp_min=0.0, clamp_max=2.0)
 
-    def scale_reward(r):
-        return float(np.clip(r / _ied_scale, -1.0, 1.0))
-
-    # ── Reward alignment constants (same as classical) ──────────
     L_MIN = 3
-    CUT_PENALTY = 0.12  # Same as classical for fair comparison
-    EXTEND_COST = 0.01  # Prevent never-cut basin
+    EXTEND_COST = 0.01
 
     # Quantum-specific: smaller batch + less frequent updates for speed
     batch_size = 4      # 4 instead of 32 → 8x fewer circuit evals in SPSA
@@ -536,6 +569,8 @@ def run_quantum_experiment(
         random.shuffle(idxlist)
         ep_rewards = []
         ep_seg_counts = []
+        round_cuts = 0
+        round_actions = 0
 
         # ε reset at Round 2: re-enable exploration
         if round_num > 0:
@@ -555,46 +590,54 @@ def run_quantum_experiment(
 
             observation, steps = env.reset(episode, "T")
             raw_split_od = observation.flatten()[1]
-            observation = normalize_obs(observation)
+            observation = obs_tracker.normalize(observation.flatten())
             episode_reward = 0.0
             seg_len = 0
             n_cuts = 0
+            ep_actions = 0
 
             for index in range(1, steps):
                 done = (index == steps - 1)
-                state_1d = observation.flatten()
-                action = agent.act(state_1d)
+                
+                # We expect the tracker to return 1D flat output so no flatten needed
+                action = agent.act(observation)
 
                 # Min segment length: force EXTEND if too short
                 seg_len += 1
                 if action == 1 and seg_len < L_MIN:
                     action = 0
 
-                observation_, reward = env.step(episode, action, index, "T")
+                observation_, raw_env_reward = env.step(episode, action, index, "T")
 
-                # Raw split_overdist for potential shaping
                 raw_split_od_next = observation_.flatten()[1]
 
-                # Potential-based shaping for EXTEND
-                if action == 0 and reward == 0:
-                    reward = raw_split_od - raw_split_od_next
+                # Base geometric reward logic
+                base_geom = 0.0
+                if action == 0 and raw_env_reward == 0:
+                    base_geom = raw_split_od - raw_split_od_next
+                else:
+                    base_geom = raw_env_reward
+                
+                # Z-normalize scale to keep neural math happy
+                base_geom = float(np.clip(base_geom / max(env.basesim_T, 1e-8), -1.0, 1.0))
+                
+                # Apply CMDP penalty
+                cost = constraint_cost(action)
+                reward = penalized_reward(base_geom, cost, lagrange.value())
 
-                reward = scale_reward(reward)
-
-                # Per-action costs (same as classical)
                 if action == 0:
                     reward -= EXTEND_COST
                 if action == 1:
-                    reward -= CUT_PENALTY
                     n_cuts += 1
                     seg_len = 0
+                    
+                ep_actions += 1
 
                 raw_split_od = raw_split_od_next
-                observation_ = normalize_obs(observation_)
+                observation_ = obs_tracker.normalize(observation_.flatten())
                 episode_reward += reward
 
-                buffer.add(state_1d, action, reward,
-                           observation_.flatten(), done)
+                buffer.add(observation, action, reward, observation_, done)
 
                 if done:
                     break
@@ -611,24 +654,34 @@ def run_quantum_experiment(
 
             ep_rewards.append(episode_reward)
             ep_seg_counts.append(n_cuts + 1)
+            round_cuts += n_cuts
+            round_actions += ep_actions
 
             agent.decay_epsilon()
 
             # Periodic evaluation
             if ep_idx % 100 == 0 and ep_idx != 0:
+                # CMDP Slow Timescale Update 
+                empirical_cut_rate = round_cuts / max(round_actions, 1)
+                new_lambda = lagrange.update(empirical_cut_rate, budget_constraint)
+                
+                # Reset accumulators for next dual evaluation period
+                round_cuts = 0
+                round_actions = 0
+                
                 env.allsubtrajs_E = []
                 val_n_extend, val_n_cut = 0, 0
                 for e in range(sidx, eidx):
                     obs, s = env.reset(e, "E")
-                    obs = normalize_obs(obs)
+                    obs = obs_tracker.normalize(obs.flatten(), update=False)
                     for idx in range(1, s):
-                        act = agent.act(obs.flatten(), greedy=True)
+                        act = agent.act(obs, greedy=True)
                         if act == 0:
                             val_n_extend += 1
                         else:
                             val_n_cut += 1
                         obs, _ = env.step(e, act, idx, "E")
-                        obs = normalize_obs(obs)
+                        obs = obs_tracker.normalize(obs.flatten(), update=False)
 
                 val_od = compute_overdist(env.clusters_E)
                 val_cr = float(val_od / env.basesim_E)
@@ -640,10 +693,11 @@ def run_quantum_experiment(
 
                 val_total = val_n_extend + val_n_cut
                 cut_pct = 100 * val_n_cut / val_total if val_total else 0
+                emp_pct = 100 * empirical_cut_rate
 
                 print(f"  Round {round_num+1}, ep {ep_idx}: "
                       f"Train CR={train_cr:.4f}, Val CR={val_cr:.4f}"
-                      f" | CUT={cut_pct:.0f}%"
+                      f" | Val CUT={cut_pct:.1f}% (β={budget_constraint.beta*100:.0f}%, λ={new_lambda:.3f})"
                       f" | R̄={np.mean(ep_rewards[-100:]):+.4f}")
 
                 for i in env.clusters_E.keys():
@@ -703,9 +757,9 @@ def compare_results(classical: dict, quantum: dict, output_dir: Path):
         print(f"{'Final Validation CR':<30} {c_cr:>15.4f} {q_cr:>15.4f}")
         print(f"{'CR difference':<30} {'':>15} {diff_pct:>+14.2f}%")
     else:
-        print(f"{'Final Validation CR':<30} "
-              f"{classical.get('final_validation_cr', 'N/A'):>15} "
-              f"{quantum.get('final_validation_cr', 'N/A'):>15}")
+        c_val = str(classical.get('final_validation_cr') or 'N/A')
+        q_val = str(quantum.get('final_validation_cr') or 'N/A')
+        print(f"{'Final Validation CR':<30} {c_val:>15} {q_val:>15}")
 
     # Save results
     results_path = output_dir / "comparison_results.json"
@@ -743,10 +797,17 @@ def run_adam_experiment(
     env = TrajRLclus(traj_path, centers_path, centers_path)
     cfg = AdamAgentConfig(hidden_sizes=[64])
     agent = AdamClassicalDQN(config=cfg, seed=seed)
-    buf = ReplayBuffer(capacity=5000, seed=seed)
+    buf = ReplayBuffer(max_size=5000, seed=seed)
 
-    _ied_scale = max(env.basesim_T, 1e-8)
-    L_MIN, CUT_PENALTY, EXTEND_COST = 3, 0.12, 0.01
+    from q_rlstc.data.observation_tracker import ObservationTracker
+    from q_rlstc.rl.cmdp import CutBudgetConstraint, LagrangeMultiplier, constraint_cost
+    from q_rlstc.rl.reward_shaping import base_geometric_reward, penalized_reward
+
+    obs_tracker = ObservationTracker(feature_dim=5, clip=3.0, warmup_steps=1000)
+    budget_constraint = CutBudgetConstraint(beta=0.15) 
+    lagrange = LagrangeMultiplier(init_lambda=0.12, lr_lambda=0.01, clamp_min=0.0, clamp_max=2.0)
+
+    L_MIN, EXTEND_COST = 3, 0.01
 
     validation_pct = 0.1
     sidx = int(amount * (1 - validation_pct))
@@ -759,11 +820,15 @@ def run_adam_experiment(
     for round_num in range(n_rounds):
         idxlist = list(range(amount))
         random.shuffle(idxlist)
+        round_cuts = 0
+        round_actions = 0
         for episode in idxlist:
             obs, steps = env.reset(episode, 'T')
-            obs = obs.copy().flatten()
-            obs[:3] /= _ied_scale
+            raw_split_od = obs.flatten()[1]
+            obs = obs_tracker.normalize(obs.flatten())
             seg_len = 0
+            n_cuts = 0
+            ep_actions = 0
             for idx in range(1, steps):
                 done = (idx == steps - 1)
                 seg_len += 1
@@ -771,15 +836,28 @@ def run_adam_experiment(
                 if action == 1 and seg_len < L_MIN:
                     action = 0
                 obs_next, raw_r = env.step(episode, action, idx, 'T')
-                obs_next = obs_next.copy().flatten()
-                obs_next[:3] /= _ied_scale
-                reward = float(np.clip(raw_r / _ied_scale, -1, 1))
+                raw_split_od_next = obs_next.flatten()[1]
+                
+                base_geom = 0.0
+                if action == 0 and raw_r == 0:
+                    base_geom = raw_split_od - raw_split_od_next
+                else:
+                    base_geom = raw_r
+
+                base_geom = float(np.clip(base_geom / max(env.basesim_T, 1e-8), -1.0, 1.0))
+                cost = constraint_cost(action)
+                reward = penalized_reward(base_geom, cost, lagrange.value())
+                
                 if action == 1:
-                    reward -= CUT_PENALTY
+                    n_cuts += 1
                     seg_len = 0
                 else:
                     reward -= EXTEND_COST
-                buf.push(obs, action, reward, obs_next, done)
+                    
+                ep_actions += 1
+                raw_split_od = raw_split_od_next
+                obs_next = obs_tracker.normalize(obs_next.flatten())
+                buf.add(obs, action, reward, obs_next, done)
                 if done:
                     break
                 if len(buf) >= batch_size:
@@ -791,26 +869,64 @@ def run_adam_experiment(
                     d = np.array([e.done for e in batch], dtype=float)
                     agent.update(s, a, r, ns, d)
                 obs = obs_next
+                
+            round_cuts += n_cuts
+            round_actions += ep_actions
+            
         agent.decay_epsilon()
+        
+        empirical_cut_rate = round_cuts / max(round_actions, 1)
+        new_lambda = lagrange.update(empirical_cut_rate, budget_constraint)
+        round_cuts = 0
+        round_actions = 0
 
         # Eval
+        val_n_extend, val_n_cut = 0, 0
         for e in range(sidx, amount):
             o, steps = env.reset(e, 'E')
-            o = o.copy().flatten()
-            o[:3] /= _ied_scale
+            o = obs_tracker.normalize(o.flatten(), update=False)
             for idx in range(1, steps):
-                q = agent.get_q_values(o.reshape(1, -1))
-                a = int(np.argmax(q))
+                a = agent.act(o.reshape(1, -1), greedy=True)
+                if a == 0:
+                    val_n_extend += 1
+                else:
+                    val_n_cut += 1
                 o, _ = env.step(e, a, idx, 'E')
-                o = o.copy().flatten()
-                o[:3] /= _ied_scale
+                o = obs_tracker.normalize(o.flatten(), update=False)
         try:
             val_cr = float(compute_overdist(env.clusters_E) / env.basesim_E)
         except (ZeroDivisionError, ValueError):
             val_cr = float('inf')
+            
+        # New metrics tracking
+        from q_rlstc.data.rlstc_cluster import compute_overdist_per_point, compute_overdist_length_weighted, compute_sse
+        try:
+            val_nvalcr = float(compute_overdist_per_point(env.clusters_E) / env.basesim_E)
+            val_wvalcr = float(compute_overdist_length_weighted(env.clusters_E) / env.basesim_E)
+            val_sse = float(compute_sse(env.clusters_E))
+        except:
+            val_nvalcr, val_wvalcr, val_sse = float('inf'), float('inf'), float('inf')
+            
+        n_segments_val = sum(len(c[4]) for c in env.clusters_E.values() if len(c) > 4)
+            
         if val_cr < best_val_cr:
             best_val_cr = val_cr
-        print(f"  Round {round_num}: val_cr={val_cr:.4f}")
+            
+        val_total = val_n_extend + val_n_cut
+        cut_pct = 100 * val_n_cut / val_total if val_total else 0
+        
+        if "history" not in results:
+            results["history"] = []
+        results["history"].append({
+            "ep": round_num,
+            "val_cr": val_cr,
+            "nvalcr": val_nvalcr,
+            "wvalcr": val_wvalcr,
+            "sse": val_sse,
+            "cut_pct": cut_pct,
+            "n_segments": n_segments_val
+        })
+        print(f"  Round {round_num}: val_cr={val_cr:.4f} | Val CUT={cut_pct:.0f}% (β={budget_constraint.beta*100:.0f}%, λ={new_lambda:.3f})")
         for i in env.clusters_E.keys():
             env.clusters_E[i][0], env.clusters_E[i][1] = [], []
             env.clusters_E[i][3] = defaultdict(list)
@@ -844,10 +960,17 @@ def run_spsa_classical_experiment(
     env = TrajRLclus(traj_path, centers_path, centers_path)
     cfg = ClassicalAgentConfig(hidden_sizes=[64])
     agent = SPSAClassicalDQN(config=cfg, seed=seed)
-    buf = ReplayBuffer(capacity=5000, seed=seed)
+    buf = ReplayBuffer(max_size=5000, seed=seed)
 
-    _ied_scale = max(env.basesim_T, 1e-8)
-    L_MIN, CUT_PENALTY, EXTEND_COST = 3, 0.12, 0.01
+    from q_rlstc.data.observation_tracker import ObservationTracker
+    from q_rlstc.rl.cmdp import CutBudgetConstraint, LagrangeMultiplier, constraint_cost
+    from q_rlstc.rl.reward_shaping import base_geometric_reward, penalized_reward
+
+    obs_tracker = ObservationTracker(feature_dim=5, clip=3.0, warmup_steps=1000)
+    budget_constraint = CutBudgetConstraint(beta=0.15) 
+    lagrange = LagrangeMultiplier(init_lambda=0.12, lr_lambda=0.01, clamp_min=0.0, clamp_max=2.0)
+
+    L_MIN, EXTEND_COST = 3, 0.01
 
     validation_pct = 0.1
     sidx = int(amount * (1 - validation_pct))
@@ -860,11 +983,15 @@ def run_spsa_classical_experiment(
     for round_num in range(n_rounds):
         idxlist = list(range(amount))
         random.shuffle(idxlist)
+        round_cuts = 0
+        round_actions = 0
         for episode in idxlist:
             obs, steps = env.reset(episode, 'T')
-            obs = obs.copy().flatten()
-            obs[:3] /= _ied_scale
+            raw_split_od = obs.flatten()[1]
+            obs = obs_tracker.normalize(obs.flatten())
             seg_len = 0
+            n_cuts = 0
+            ep_actions = 0
             for idx in range(1, steps):
                 done = (idx == steps - 1)
                 seg_len += 1
@@ -872,15 +999,28 @@ def run_spsa_classical_experiment(
                 if action == 1 and seg_len < L_MIN:
                     action = 0
                 obs_next, raw_r = env.step(episode, action, idx, 'T')
-                obs_next = obs_next.copy().flatten()
-                obs_next[:3] /= _ied_scale
-                reward = float(np.clip(raw_r / _ied_scale, -1, 1))
+                raw_split_od_next = obs_next.flatten()[1]
+                
+                base_geom = 0.0
+                if action == 0 and raw_r == 0:
+                    base_geom = raw_split_od - raw_split_od_next
+                else:
+                    base_geom = raw_r
+
+                base_geom = float(np.clip(base_geom / max(env.basesim_T, 1e-8), -1.0, 1.0))
+                cost = constraint_cost(action)
+                reward = penalized_reward(base_geom, cost, lagrange.value())
+                
                 if action == 1:
-                    reward -= CUT_PENALTY
+                    n_cuts += 1
                     seg_len = 0
                 else:
                     reward -= EXTEND_COST
-                buf.push(obs, action, reward, obs_next, done)
+                    
+                ep_actions += 1
+                raw_split_od = raw_split_od_next
+                obs_next = obs_tracker.normalize(obs_next.flatten())
+                buf.add(obs, action, reward, obs_next, done)
                 if done:
                     break
                 if len(buf) >= batch_size:
@@ -892,25 +1032,65 @@ def run_spsa_classical_experiment(
                     d = np.array([e.done for e in batch], dtype=float)
                     agent.update(s, a, r, ns, d)
                 obs = obs_next
+                
+            round_cuts += n_cuts
+            round_actions += ep_actions
+            
         agent.decay_epsilon()
+        
+        empirical_cut_rate = round_cuts / max(round_actions, 1)
+        new_lambda = lagrange.update(empirical_cut_rate, budget_constraint)
+        round_cuts = 0
+        round_actions = 0
 
+        val_n_extend, val_n_cut = 0, 0
         for e in range(sidx, amount):
             o, steps = env.reset(e, 'E')
-            o = o.copy().flatten()
-            o[:3] /= _ied_scale
+            o = obs_tracker.normalize(o.flatten(), update=False)
             for idx in range(1, steps):
-                q = agent.get_q_values(o.reshape(1, -1))
-                a = int(np.argmax(q))
+                a = agent.act(o.reshape(1, -1), greedy=True)
+                if a == 0:
+                    val_n_extend += 1
+                else:
+                    val_n_cut += 1
                 o, _ = env.step(e, a, idx, 'E')
-                o = o.copy().flatten()
-                o[:3] /= _ied_scale
+                o = obs_tracker.normalize(o.flatten(), update=False)
         try:
             val_cr = float(compute_overdist(env.clusters_E) / env.basesim_E)
         except (ZeroDivisionError, ValueError):
             val_cr = float('inf')
+            
+        # New metrics tracking
+        from q_rlstc.data.rlstc_cluster import compute_overdist_per_point, compute_overdist_length_weighted, compute_sse
+        try:
+            val_nvalcr = float(compute_overdist_per_point(env.clusters_E) / env.basesim_E)
+            val_wvalcr = float(compute_overdist_length_weighted(env.clusters_E) / env.basesim_E)
+            val_sse = float(compute_sse(env.clusters_E))
+        except:
+            val_nvalcr, val_wvalcr, val_sse = float('inf'), float('inf'), float('inf')
+            
+        n_segments_val = sum(len(c[4]) for c in env.clusters_E.values() if len(c) > 4)
+
         if val_cr < best_val_cr:
             best_val_cr = val_cr
-        print(f"  Round {round_num}: val_cr={val_cr:.4f}")
+            
+        val_total = val_n_extend + val_n_cut
+        cut_pct = 100 * val_n_cut / val_total if val_total else 0
+        
+        if "history" not in results:
+            results["history"] = []
+        results["history"].append({
+            "ep": round_num,
+            "val_cr": val_cr,
+            "nvalcr": val_nvalcr,
+            "wvalcr": val_wvalcr,
+            "sse": val_sse,
+            "cut_pct": cut_pct,
+            "n_segments": n_segments_val
+        })
+        val_total = val_n_extend + val_n_cut
+        cut_pct = 100 * val_n_cut / val_total if val_total else 0
+        print(f"  Round {round_num}: val_cr={val_cr:.4f} | Val CUT={cut_pct:.0f}% (β={budget_constraint.beta*100:.0f}%, λ={new_lambda:.3f})")
         for i in env.clusters_E.keys():
             env.clusters_E[i][0], env.clusters_E[i][1] = [], []
             env.clusters_E[i][3] = defaultdict(list)
@@ -967,6 +1147,10 @@ def main():
         default="all",
         help="Which system(s) to run: all, both (classical+quantum), or individual",
     )
+    parser.add_argument(
+        "--adaptive-shots", action="store_true",
+        help="Enable quantum hardware-aware Hoeffding allocation limits"
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -996,7 +1180,8 @@ def main():
     # Quantum VQ-DQN
     if run_set in ("all", "both", "quantum"):
         all_results["quantum"] = run_quantum_experiment(
-            args.traj_path, args.centers_path, args.amount, output_dir, args.seed
+            args.traj_path, args.centers_path, args.amount, output_dir, args.seed,
+            adaptive_shots=args.adaptive_shots
         )
 
     # Comparison

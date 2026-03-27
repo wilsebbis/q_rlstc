@@ -10,6 +10,7 @@ q_rlstc/
 │   ├── __init__.py
 │   ├── data/                  # Trajectory data layer
 │   │   ├── __init__.py
+│   │   ├── dataset_loader.py      # Abstract dataset loader interface
 │   │   ├── rlstc_point.py         # Point(x, y, t)
 │   │   ├── rlstc_point_xy.py      # Point_xy(x, y) for segment geometry
 │   │   ├── rlstc_segment.py       # Directed line segment
@@ -26,7 +27,10 @@ q_rlstc/
 │   │   ├── adam_classical_agent.py # Classical DQN with Adam
 │   │   ├── original_classical_agent.py # Faithful RLSTCcode DQN
 │   │   ├── replay_buffer.py       # Experience replay
-│   │   └── spsa.py                # SPSA optimizer
+│   │   ├── spsa.py                # SPSA optimizer
+│   │   ├── adaptive_shots.py      # Q-margin-based shot allocation
+│   │   ├── drop_action.py         # DROP action extension
+│   │   └── soft_targets.py        # Entropy-regularized soft-DQN targets
 │   ├── quantum/               # Quantum circuit infrastructure
 │   │   ├── __init__.py
 │   │   ├── vqdqn_circuit.py       # Circuit builder & evaluation
@@ -34,25 +38,33 @@ q_rlstc/
 │   ├── clustering/            # Clustering algorithms & metrics
 │   │   ├── __init__.py
 │   │   ├── classical_kmeans.py    # Pure-NumPy k-means
-│   │   ├── metrics.py             # OD, Silhouette, Segmentation F1
+│   │   ├── metrics.py             # OD, Silhouette, Segmentation F1, wValCR
 │   │   ├── pickle_loader.py       # RLSTCcode pickle loader
 │   │   ├── trajdistance.py        # q_rlstc-native IED
 │   │   ├── initcenters.py         # K-means++ initialization
-│   │   └── splitmethod.py         # Post-hoc clustering (DBSCAN, etc.)
+│   │   ├── splitmethod.py         # Post-hoc clustering (DBSCAN, etc.)
+│   │   └── random_frontier.py     # Random-policy ValCR frontier
+│   ├── utils/                 # Statistical utilities
+│   │   ├── __init__.py
+│   │   └── stats.py               # Bootstrap CI, paired significance tests
 │   └── visualization/         # Plotting utilities
 │       ├── __init__.py
 │       └── plot_utils.py          # Learning curves, comparisons
 ├── experiments/               # Experiment runners
 │   ├── run_thesis_experiments.py  # Multi-seed thesis experiments
-│   └── run_cross_comparison.py    # 4-agent cross-comparison
+│   ├── run_cross_comparison.py    # 4-agent cross-comparison
+│   ├── smoke_matrix.py            # Quick smoke tests across configs
+│   ├── compare_results.py         # Result comparison utilities
+│   ├── generate_classical_report.py # Classical baseline report
+│   └── run_significance_test.py   # Statistical significance tests
 ├── tests/                     # Unit & integration tests
 ├── docs/                      # Documentation
 │   ├── wiki/                      # Wiki pages (this directory)
-│   └── README.md                  # Docs overview
-├── data/                      # Data files (gitignored)
+│   └── index.md                   # Docs index
 ├── results/                   # Experiment outputs (gitignored)
 ├── README.md                  # Project README
-└── pyproject.toml             # Package configuration
+├── pyproject.toml             # Package configuration
+└── run_all.sh                 # Script to run all experiments
 ```
 
 ## Module Dependencies
@@ -91,12 +103,24 @@ q_rlstc/
 ## Package Exports
 
 ```python
-# Top-level imports
+# rl/ exports
 from q_rlstc.rl import (
     VQDQNAgent, SPSAClassicalDQN, AdamClassicalDQN, OriginalClassicalDQN,
+    ReplayBuffer, Experience, SPSAOptimizer,
 )
-from q_rlstc.quantum import VQDQNCircuitBuilder, BackendFactory
-from q_rlstc.clustering import ClassicalKMeans
+# quantum/ exports
+from q_rlstc.quantum import (
+    VQDQNCircuitBuilder, BackendFactory,
+    build_vqdqn_circuit, evaluate_q_values, angle_encode, get_backend,
+)
+# clustering/ exports
+from q_rlstc.clustering import (
+    ClassicalKMeans, KMeansResult, kmeans_fit,
+    overall_distance, silhouette_score, segmentation_f1,
+    initialize_centers, compute_distance_matrix,
+)
+# utils/ exports
+from q_rlstc.utils import bootstrap_ci, paired_bootstrap_test
 ```
 
 ---

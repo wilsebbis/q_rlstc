@@ -1,6 +1,6 @@
 # Visualization & Plotting
 
-The `q_rlstc.visualization` module provides **13 publication-quality plotting functions** and a `BenchmarkRunner` for reproducible experiments.
+The `q_rlstc.visualization` module provides publication-quality plotting functions for training analysis and experiment visualization.
 
 ## Quick Start
 
@@ -9,7 +9,6 @@ from q_rlstc.visualization import (
     plot_learning_curves,
     plot_cluster_assignments,
     plot_segmentation_boundaries,
-    BenchmarkRunner,
 )
 ```
 

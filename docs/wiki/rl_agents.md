@@ -10,7 +10,7 @@ Q-RLSTC includes **four DQN agents** — one quantum and three classical — sha
 
 | Agent | Module | Optimizer | Architecture | Key Hyperparameters |
 |-------|--------|-----------|--------------|---------------------|
-| **VQDQNAgent** | `rl/vqdqn_agent.py` | SPSA | 5q HEA quantum circuit | shots=512, 3 layers |
+| **VQDQNAgent** | `rl/vqdqn_agent.py` | SPSA | 5q HEA quantum circuit | shots=512, n_layers=2 (default) |
 | **SPSAClassicalDQN** | `rl/spsa_classical_agent.py` | SPSA | MLP (configurable) | Same SPSA config as VQDQN |
 | **AdamClassicalDQN** | `rl/adam_classical_agent.py` | Adam (backprop) | MLP [64] | lr=1e-3, β₁=0.9, β₂=0.999 |
 | **OriginalClassicalDQN** | `rl/original_classical_agent.py` | SGD | MLP [64] (faithful RLSTCcode) | lr=0.001, γ=0.99, τ=0.05 |

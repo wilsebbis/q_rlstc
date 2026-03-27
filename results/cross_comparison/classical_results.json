@@ -1,0 +1,10 @@
+{
+  "system": "classical_rlstc",
+  "param_count": 514,
+  "training_cr": [],
+  "validation_cr": [],
+  "elapsed_time": 1.640031337738037,
+  "final_training_cr": null,
+  "final_validation_cr": null,
+  "model_path": "results/cross_comparison/classical_model.npz"
+}

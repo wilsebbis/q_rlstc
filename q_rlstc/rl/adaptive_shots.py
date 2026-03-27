@@ -1,90 +1,56 @@
-"""Adaptive shot allocation for VQ-DQN agents.
-
-Drop-in wrapper that dynamically adjusts measurement shots based on
-Q-value margins:
-
-    |Q(s,extend) - Q(s,cut)| < τ₁  →  shots_high   (need precision)
-    |Q(s,extend) - Q(s,cut)| > τ₂  →  shots_low    (confident, save shots)
-    else                            →  shots_default
-
-This trades faster evaluation on confident states for higher precision
-on margin-critical states, reducing total measurement budget while
-maintaining decision quality.
-
-Usage:
-    scheduler = AdaptiveShotScheduler(
-        shots_low=64, shots_default=256, shots_high=1024,
-        tau_low=1.0, tau_high=0.2
-    )
-    shots = scheduler.get_shots(q_margin=0.3)
-"""
-
 import numpy as np
-from typing import List, Optional
-from dataclasses import dataclass, field
 
-
-@dataclass
-class AdaptiveShotScheduler:
-    """Q-margin-based shot allocation scheduler.
-
-    Attributes:
-        shots_low: Shot count for confident decisions (wide margin).
-        shots_default: Shot count for moderate decisions.
-        shots_high: Shot count for uncertain decisions (narrow margin).
-        tau_low: Margin threshold below which shots_high is used.
-        tau_high: Margin threshold above which shots_low is used.
+def hoeffding_bound(delta: float, n_shots: int, r_range: float = 2.0) -> float:
     """
-    shots_low: int = 64
-    shots_default: int = 256
-    shots_high: int = 1024
-    tau_low: float = 0.2     # |ΔQ| < τ_low → high shots
-    tau_high: float = 1.0    # |ΔQ| > τ_high → low shots
+    Computes the Hoeffding bound for a given confidence level and number of shots.
+    
+    Formula: epsilon = R * sqrt(ln(2/delta) / (2 * n_shots))
+    where R is the range of the random variable. For Q-values estimated
+    from probabilities scaled to [-1, 1], R is 2.0.
+    
+    Args:
+        delta: Allowed failure probability (e.g., 0.05 for 95% confidence).
+        n_shots: Number of measurement shots.
+        r_range: Range of the observable.
+        
+    Returns:
+        The margin of error epsilon.
+    """
+    return r_range * np.sqrt(np.log(2.0 / delta) / (2.0 * max(1, n_shots)))
 
-    # Tracking (for logging / histogram)
-    _history: List[int] = field(default_factory=list, repr=False)
-
-    def get_shots(self, q_margin: float) -> int:
-        """Determine shot count from Q-value margin.
-
-        Args:
-            q_margin: |Q(s, extend) - Q(s, cut)|. Non-negative.
-
-        Returns:
-            Number of measurement shots to use.
-        """
-        margin = abs(q_margin)
-
-        if margin < self.tau_low:
-            shots = self.shots_high
-        elif margin > self.tau_high:
-            shots = self.shots_low
-        else:
-            shots = self.shots_default
-
-        self._history.append(shots)
-        return shots
-
-    def get_stats(self) -> dict:
-        """Return shot allocation statistics.
-
-        Returns:
-            Dict with mean, std, histogram bins, and total shot budget.
-        """
-        if not self._history:
-            return {"mean": 0, "std": 0, "total": 0, "n_decisions": 0}
-
-        h = np.array(self._history)
-        return {
-            "mean": float(np.mean(h)),
-            "std": float(np.std(h)),
-            "total": int(np.sum(h)),
-            "n_decisions": len(h),
-            "pct_low": float(100 * np.mean(h == self.shots_low)),
-            "pct_default": float(100 * np.mean(h == self.shots_default)),
-            "pct_high": float(100 * np.mean(h == self.shots_high)),
-        }
-
-    def reset(self) -> None:
-        """Clear shot history for a new episode/epoch."""
-        self._history = []
+def needs_more_shots(q_values: np.ndarray,
+                     n_shots: int,
+                     max_shots: int,
+                     confidence_delta: float = 0.05,
+                     r_range: float = 2.0) -> bool:
+    """
+    Determines if more shots are needed to confidently separate the top two Q-values.
+    
+    Args:
+        q_values: The current estimated Q-values.
+        n_shots: The number of shots used to estimate them.
+        max_shots: The maximum allowed shots (hard ceiling).
+        confidence_delta: The allowed failure probability for the gap.
+        r_range: The range of the random variable.
+        
+    Returns:
+        True if the gap between the top two Q-values is smaller than the 
+        Hoeffding confidence bounds AND we haven't reached max_shots.
+    """
+    if n_shots >= max_shots:
+        return False
+        
+    if len(q_values) < 2:
+        return False
+        
+    # Sort descending to get top 2
+    sorted_q = np.sort(q_values)[::-1]
+    gap = sorted_q[0] - sorted_q[1]
+    
+    # We apply the bound to the difference of expectations. 
+    # A conservative bound is 2 * epsilon.
+    epsilon = hoeffding_bound(confidence_delta, n_shots, r_range)
+    
+    # If the empirical gap is smaller than or equal to 2 * epsilon, 
+    # we aren't confident enough that the top action is strictly better.
+    return bool(gap <= 2.0 * epsilon)

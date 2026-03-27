@@ -190,7 +190,7 @@ c_k = c / (k + 1)^γ        # Perturbation schedule
 # Defaults:
 A = 20      # Stability constant (~10-20% of expected iterations)
 a = 0.12    # Initial learning rate
-c = 0.10    # Initial perturbation (larger than theory suggests for shot noise)
+c = 0.08    # Initial perturbation (larger than theory suggests for shot noise)
 α = 0.602   # Theory optimal: 1.0, practice: ~0.6
 γ = 0.101   # Theory optimal: 1/6, practice: ~0.1
 ```

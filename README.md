@@ -45,29 +45,39 @@ q_rlstc/
 │   │   ├── rlstc_segment.py    #   Segment data type
 │   │   ├── rlstc_traj.py       #   Trajectory data type
 │   │   ├── rlstc_trajdistance.py  # IED distance computation
+│   │   ├── preprocessing.py    #   GPS filtering & normalization
+│   │   ├── dataset_loader.py   #   Abstract dataset loader interface
 │   │   └── trajectory_scheduler.py # Train/val split + drift/low-data modes
 │   ├── rl/                     # RL agents and optimization
-│   │   ├── vqdqn_agent.py      #   VQ-DQN agent (quantum policy, 34 params)
+│   │   ├── vqdqn_agent.py      #   VQ-DQN agent (quantum policy)
 │   │   ├── spsa_classical_agent.py # Classical DQN (MLP + SPSA)
 │   │   ├── adam_classical_agent.py #  Classical DQN (MLP + Adam backprop)
 │   │   ├── original_classical_agent.py # RLSTCcode-faithful DQN (5→64→2)
 │   │   ├── spsa.py             #   SPSA optimizer
-│   │   └── replay_buffer.py    #   Experience replay
+│   │   ├── replay_buffer.py    #   Experience replay
+│   │   ├── adaptive_shots.py   #   Q-margin-based shot allocation
+│   │   ├── drop_action.py      #   DROP action extension
+│   │   └── soft_targets.py     #   Entropy-regularized soft-DQN targets
 │   ├── quantum/                # Quantum circuit infrastructure
 │   │   ├── vqdqn_circuit.py    #   VQC builder, angle encoding, fast simulation
 │   │   └── backends.py         #   Backend factory (ideal, Eagle, Heron noise)
 │   ├── clustering/             # Classical clustering utilities
 │   │   ├── classical_kmeans.py #   K-means implementation
-│   │   ├── metrics.py          #   OD, SSE, F1 metrics
+│   │   ├── metrics.py          #   OD, SSE, F1, wValCR metrics
 │   │   ├── pickle_loader.py    #   Pickle file I/O
-│   │   └── trajdistance.py     #   Trajectory distance functions
+│   │   ├── trajdistance.py     #   Trajectory distance functions
+│   │   └── random_frontier.py  #   Random-policy ValCR frontier
 │   ├── utils/                  # Statistical utilities
 │   │   └── stats.py            #   Bootstrap CI, paired significance tests
 │   └── visualization/          # Plotting
 │       └── plot_utils.py       #   All plot functions
 ├── experiments/                # Experiment scripts
 │   ├── run_thesis_experiments.py   # ★ Unified thesis runner (D1-D5, E1-E6, S1, AB1)
-│   └── run_cross_comparison.py     # Classical MLP vs VQ-DQN comparison
+│   ├── run_cross_comparison.py     # Classical MLP vs VQ-DQN comparison
+│   ├── smoke_matrix.py             # Quick smoke tests across configs
+│   ├── compare_results.py          # Result comparison utilities
+│   ├── generate_classical_report.py # Classical baseline report
+│   └── run_significance_test.py    # Statistical significance tests
 ├── docs/wiki/                  # Documentation wiki
 │   ├── ThesisOutline.md        # ★ Full thesis chapter outline
 │   ├── architecture.md         # System architecture
@@ -85,7 +95,7 @@ q_rlstc/
 │   ├── debugging.md            # Debugging guide
 │   ├── visualization_and_plotting.md  # Plot generation
 │   ├── compute_backends.md     # Backend configuration
-│   ├── roadmap.md              # Future work & research directions
+│   └── roadmap.md              # Future work & research directions
 ├── tests/                      # Unit tests
 │   ├── test_angle_encoding.py
 │   ├── test_hea_depth.py
@@ -99,7 +109,7 @@ q_rlstc/
 ## Architecture
 
 ```
-Observation (5D)  →  Angle Encoding  →  5-qubit VQC (3 HEA layers)  →  Q(extend), Q(cut)
+Observation (5D)  →  Angle Encoding  →  5-qubit VQC (n HEA layers)  →  Q(extend), Q(cut)
        ↑                                        ↓
   TrajRLclus MDP  ←────── action ←──── ε-greedy policy
        ↓

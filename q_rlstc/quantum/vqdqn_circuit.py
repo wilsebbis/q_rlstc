@@ -513,6 +513,8 @@ def evaluate_q_values(
     output_bias: np.ndarray = None,
     readout_mode: str = "standard",
     entanglement: str = "linear",
+    adaptive_shots: bool = False,
+    confidence_delta: float = 0.05,
 ) -> np.ndarray:
     """Evaluate Q-values by executing the VQ-DQN circuit.
     
@@ -574,30 +576,75 @@ def evaluate_q_values(
     else:
         # ── Measurement-based path (shots > 0) ──────────────────
         from qiskit import transpile
+        from collections import Counter
+        from ..rl.adaptive_shots import needs_more_shots
         
         circuit = build_vqdqn_circuit(
             state, params, n_qubits, n_layers,
             use_data_reuploading, add_measurements=True
         )
         transpiled = transpile(circuit, backend)
-        job = backend.run(transpiled, shots=shots)
-        result = job.result()
-        counts = result.get_counts()
         
-        if readout_mode == "multi_observable":
-            z0 = compute_expectation_from_counts(counts, shots, 0, n_qubits)
-            z1 = compute_expectation_from_counts(counts, shots, 1, n_qubits)
-            z2z3 = compute_parity_expectation(counts, shots, 2, 3, n_qubits)
-            z4z5 = compute_parity_expectation(counts, shots, 4, 5, n_qubits)
-            q_values = np.array([
-                output_scale[0] * z0 + output_scale[2] * z2z3 + output_bias[0],
-                output_scale[1] * z1 + output_scale[3] * z4z5 + output_bias[1],
-            ])
-        else:
+        max_scale = float(np.max(output_scale))
+        r_range = 2.0 * max_scale
+        
+        if adaptive_shots and shots >= 32:
+            collected_shots = 0
+            # Start with 32 shots
+            current_batch_shots = 32
+            cumulative_counts = Counter()
             q_values = np.zeros(2)
-            for action in range(2):
-                qubit_idx = action
-                exp_val = compute_expectation_from_counts(counts, shots, qubit_idx, n_qubits)
-                q_values[action] = exp_val * output_scale[action] + output_bias[action]
+            
+            while collected_shots < shots:
+                # Run batch
+                current_batch_shots = min(current_batch_shots, shots - collected_shots)
+                job = backend.run(transpiled, shots=current_batch_shots)
+                batch_counts = job.result().get_counts()
+                
+                # Accumulate counts
+                for bitstring, count in batch_counts.items():
+                    cumulative_counts[bitstring] += count
+                collected_shots += current_batch_shots
+                
+                # Evaluate intermediate Q-values
+                if readout_mode == "multi_observable":
+                    z0 = compute_expectation_from_counts(cumulative_counts, collected_shots, 0, n_qubits)
+                    z1 = compute_expectation_from_counts(cumulative_counts, collected_shots, 1, n_qubits)
+                    z2z3 = compute_parity_expectation(cumulative_counts, collected_shots, 2, 3, n_qubits)
+                    z4z5 = compute_parity_expectation(cumulative_counts, collected_shots, 4, 5, n_qubits)
+                    q_values = np.array([
+                        output_scale[0] * z0 + output_scale[2] * z2z3 + output_bias[0],
+                        output_scale[1] * z1 + output_scale[3] * z4z5 + output_bias[1],
+                    ])
+                else:
+                    for action in range(2):
+                        exp_val = compute_expectation_from_counts(cumulative_counts, collected_shots, action, n_qubits)
+                        q_values[action] = exp_val * output_scale[action] + output_bias[action]
+                
+                # Check bounds
+                if not needs_more_shots(q_values, collected_shots, shots, confidence_delta, r_range):
+                    break
+                
+                # Double batch size for next round
+                current_batch_shots *= 2
+        else:
+            job = backend.run(transpiled, shots=shots)
+            counts = job.result().get_counts()
+            
+            if readout_mode == "multi_observable":
+                z0 = compute_expectation_from_counts(counts, shots, 0, n_qubits)
+                z1 = compute_expectation_from_counts(counts, shots, 1, n_qubits)
+                z2z3 = compute_parity_expectation(counts, shots, 2, 3, n_qubits)
+                z4z5 = compute_parity_expectation(counts, shots, 4, 5, n_qubits)
+                q_values = np.array([
+                    output_scale[0] * z0 + output_scale[2] * z2z3 + output_bias[0],
+                    output_scale[1] * z1 + output_scale[3] * z4z5 + output_bias[1],
+                ])
+            else:
+                q_values = np.zeros(2)
+                for action in range(2):
+                    qubit_idx = action
+                    exp_val = compute_expectation_from_counts(counts, shots, qubit_idx, n_qubits)
+                    q_values[action] = exp_val * output_scale[action] + output_bias[action]
     
     return q_values

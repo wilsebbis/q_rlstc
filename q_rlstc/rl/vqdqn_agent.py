@@ -72,6 +72,8 @@ class AgentConfig:
     anti_barren_plateau: bool = False # near-zero circuit param init
     use_soft_targets: bool = False    # entropy-regularized targets (soft-DQN)
     soft_alpha: float = 0.1           # entropy temperature for soft targets
+    adaptive_shots: bool = False      # dynamically scale shots via Hoeffding bounds
+    confidence_delta: float = 0.05    # confidence bound for adaptive shots
     
     def __post_init__(self):
         """Auto-set fields from version."""
@@ -250,6 +252,8 @@ class VQDQNAgent:
             output_bias=bias,
             readout_mode=self.readout_mode,
             entanglement=self.config.entanglement,
+            adaptive_shots=self.config.adaptive_shots,
+            confidence_delta=self.config.confidence_delta,
         )
         # Fix 5: NaN guard + widened clip
         if not np.all(np.isfinite(q)):

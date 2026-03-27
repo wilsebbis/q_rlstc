@@ -5,7 +5,7 @@
 
 ## Training Loop
 
-Defined in `train.py`:
+The training loop is implemented in the experiment scripts (e.g. `run_thesis_experiments.py`):
 
 ```python
 for epoch in range(n_epochs):
@@ -14,13 +14,15 @@ for epoch in range(n_epochs):
 
         while not done:
             q_values = agent.get_q_values(state)         # 512 shots
-            action = epsilon_greedy(q_values, epsilon)    # or SAC sample (Version C)
+            action = agent.act(state)                     # ε-greedy or Boltzmann
             next_state, reward, done = env.step(action)   # EXTEND/CUT/DROP/SKIP
-            replay_buffer.push(state, action, reward, next_state, done)
+            replay_buffer.add(state, action, reward, next_state, done)
 
             if replay_buffer.is_ready(batch_size):
-                batch = replay_buffer.sample(batch_size)
-                agent.update(batch)                       # SPSA / m-SPSA step
+                states, actions, rewards, next_states, dones = \
+                    replay_buffer.sample_batch(batch_size)
+                agent.update(states, actions, rewards,
+                             next_states, dones)          # SPSA step
 
             state = next_state
 
@@ -73,7 +75,7 @@ This smooths out the inherently noisy gradients from quantum measurement statist
 ```python
 class SPSAOptimizer:
     a: float = 0.12         # Initial step size
-    c: float = 0.10         # Initial perturbation size (larger to overcome shot noise)
+    c: float = 0.08         # Initial perturbation size (larger to overcome shot noise)
     A: int   = 20           # Step size offset (stabilises early training)
     alpha: float = 0.602    # Step size decay rate (standard SPSA theory)
     gamma: float = 0.101    # Perturbation decay rate
@@ -130,8 +132,7 @@ def compute_target(reward, next_state, done):
 Defined in `replay_buffer.py`:
 
 ```python
-@dataclass
-class Experience:
+class Experience(NamedTuple):
     state: np.ndarray        # 5D or 8D
     action: int              # 0 (EXTEND), 1 (CUT), 2 (DROP/SKIP)
     reward: float
@@ -141,6 +142,7 @@ class Experience:
 class ReplayBuffer:
     buffer: deque(maxlen=5_000)
     # Uniform random sampling (no prioritised replay)
+    # Methods: add(), sample_batch(), sample_batch_stratified(), is_ready()
 ```
 
 Training only starts when the buffer has `≥ batch_size` samples.
