@@ -90,10 +90,12 @@ def run_quantum_baseline(config):
         ag_config = AgentConfig(n_qubits=env.n_features)
         RL_q = VQDQNAgent(config=ag_config)
         
-        # Locate the model matching the quantum baseline
-        modelnames = glob.glob(os.path.join(config.modeldir, "*.npz"))
+        # Locate the model matching the quantum baseline, explicitly ignoring 130-byte LFS text pointers
+        all_models = glob.glob(os.path.join(config.modeldir, "*.npz"))
+        modelnames = [m for m in all_models if os.path.getsize(m) > 1024]
+        
         if not modelnames:
-            raise FileNotFoundError(f"No quantum checkpoint (*.npz) found in {config.modeldir}")
+            raise FileNotFoundError(f"No valid binary quantum checkpoint (*.npz > 1KB) found in {config.modeldir}")
         
         RL_q.load_checkpoint(modelnames[0])
         elist = [i for i in range(config.amount)]
