@@ -5,9 +5,9 @@
         "preprocessing": true,
         "metric": "OD",
         "distance": "dIED",
-        "testdata": "../data/Tdrive_testdata",
-        "base_cluster": "../data/tdrive_clustercenter",
-        "modeldir": "../savemodels/kfoldmodels2",
+        "testdata": "q_rlstc/data/Tdrive_testdata",
+        "base_cluster": "q_rlstc/data/tdrive_clustercenter",
+        "modeldir": "savemodels/kfoldmodels2",
         "amount": 1000
     },
     "repo_baseline": {
@@ -16,9 +16,9 @@
         "preprocessing": false,
         "metric": "OD",
         "distance": "dIED",
-        "testdata": "../data/Tdrive_testdata",
-        "base_cluster": "../data/tdrive_clustercenter",
-        "modeldir": "../savemodels/kfoldmodels2",
+        "testdata": "q_rlstc/data/Tdrive_testdata",
+        "base_cluster": "q_rlstc/data/tdrive_clustercenter",
+        "modeldir": "savemodels/kfoldmodels2",
         "amount": 1000
     }
 }
