@@ -1,0 +1,2305 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Quantum-Enhanced Reinforcement Learning for Sub-Trajectory Clustering using Variational Quantum Deep Q-Networks">
+      
+      
+        <meta name="author" content="William Sebbis">
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Q-RLSTC Results Explanation - Q-RLSTC Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#q-rlstc-results-explanation" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Q-RLSTC Documentation" class="md-header__button md-logo" aria-label="Q-RLSTC Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Q-RLSTC Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Q-RLSTC Results Explanation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/wilsebbis/q_rlstc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../wiki/architecture/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../wiki/data_layer/" class="md-tabs__link">
+          
+  
+  
+  Data Layer
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../wiki/rl_agents/" class="md-tabs__link">
+          
+  
+  
+  Agents
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../wiki/training_pipeline/" class="md-tabs__link">
+          
+  
+  
+  Training
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../wiki/comparison/" class="md-tabs__link">
+          
+  
+  
+  Results
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../wiki/api_reference/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../wiki/roadmap/" class="md-tabs__link">
+          
+  
+  
+  Planning
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Q-RLSTC Documentation" class="md-nav__button md-logo" aria-label="Q-RLSTC Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Q-RLSTC Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/wilsebbis/q_rlstc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    System Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/project_structure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Structure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Layer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Data Layer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/data_layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Layer Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/distance_and_clustering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance & Clustering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/mdp_and_rewards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MDP & Rewards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Agents
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/rl_agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RL Agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/quantum_circuit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quantum Circuit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/compute_backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compute Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Training
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/training_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/experimental_design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Experimental Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/benchmarking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/visualization_and_plotting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visualization & Plotting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/noise_and_hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Noise & Hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/api_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/technical_deep_dive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technical Deep Dive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/justifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design Justifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planning
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Planning
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wiki/ThesisOutline.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Thesis Outline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Executive Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-what-we-measure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. What We Measure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. What We Measure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#competitive-ratio-valcr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Competitive Ratio (ValCR)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cut" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CUT%
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-diagnostic-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Diagnostic Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-experiment-timeline-result-directories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Experiment Timeline &amp; Result Directories
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-models-tested-e1-core-quantum-utility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Models Tested (E1: Core Quantum Utility)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-primary-results-corrected-e1-5-seed-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Primary Results (Corrected E1, 5-Seed Summary)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Primary Results (Corrected E1, 5-Seed Summary)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-main-comparison-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Main Comparison Table
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-key-observations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Key Observations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-classical-baseline-context-rlstccode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Classical Baseline Context (RLSTCcode)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Classical Baseline Context (RLSTCcode)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cross-system-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-System Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-metric-degeneracy-discovery-d1-diagnostic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Metric Degeneracy Discovery (D1 Diagnostic)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-the-metric-bug-and-its-fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. The Metric Bug and Its Fix
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. The Metric Bug and Its Fix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-went-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Went Wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-this-caused" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What This Caused
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-we-fixed-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How We Fixed It
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evidence-the-fix-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence the Fix Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-what-this-means-for-the-thesis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. What This Means for the Thesis
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. What This Means for the Thesis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claims-we-can-make" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claims We Can Make
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#claims-we-cannot-make" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claims We Cannot Make
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-open-questions-for-discussion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Open Questions for Discussion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-file-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. File Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="q-rlstc-results-explanation">Q-RLSTC Results Explanation<a class="headerlink" href="#q-rlstc-results-explanation" title="Permanent link">&para;</a></h1>
+<p><strong>Prepared for advisor meeting — February 2026</strong></p>
+<hr />
+<h2 id="1-executive-summary">1. Executive Summary<a class="headerlink" href="#1-executive-summary" title="Permanent link">&para;</a></h2>
+<p>Q-RLSTC replaces the classical DQN policy network in the RLSTC trajectory clustering framework with a <strong>34-parameter Variational Quantum Deep Q-Network (VQ-DQN)</strong> — a 5-qubit, 3-layer hardware-efficient ansatz. The key research question: <em>does the quantum circuit provide any advantage over classical networks for this RL-driven sub-trajectory segmentation task?</em></p>
+<p><strong>Bottom line:</strong> Under controlled gradient-free (SPSA) training with limited data, the VQ-DQN is competitive with — and often beats — classical networks that have up to <strong>39× more parameters</strong>. However, classical networks trained with SGD on 100× more data still achieve the best absolute clustering quality. The quantum advantage is <strong>regime-specific</strong>: parameter efficiency under constrained optimisation, not universal superiority.</p>
+<hr />
+<h2 id="2-what-we-measure">2. What We Measure<a class="headerlink" href="#2-what-we-measure" title="Permanent link">&para;</a></h2>
+<h3 id="competitive-ratio-valcr">Competitive Ratio (ValCR)<a class="headerlink" href="#competitive-ratio-valcr" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[\text{ValCR} = \frac{\text{OD}_{\text{segmented}}}{\text{OD}_{\text{baseline}}}\]</div>
+<ul>
+<li><strong>OD</strong> = average over-distance (mean IED from each sub-trajectory to its cluster centre)</li>
+<li><strong>Lower ValCR is better</strong>: &lt; 1.0 means the agent produces tighter clusters than no segmentation</li>
+<li>ValCR = 1.0 is parity; &gt; 1.0 is worse than not segmenting at all</li>
+</ul>
+<h3 id="cut">CUT%<a class="headerlink" href="#cut" title="Permanent link">&para;</a></h3>
+<p>Percentage of timesteps where the agent chooses to cut (create a new segment). Higher CUT% = more segments.</p>
+<h3 id="key-diagnostic-discovery">Key Diagnostic Discovery<a class="headerlink" href="#key-diagnostic-discovery" title="Permanent link">&para;</a></h3>
+<p>We discovered and fixed a <strong>denominator bug</strong> in ValCR: the baseline OD (<code>basesim</code>) was a static precomputed scalar that didn't change with the validation fold. This decoupled the metric from the actual data being evaluated, inflated cross-seed variance, and produced artificially high CR values (&gt;1.0 everywhere). The fix: compute <code>basesim</code> dynamically per validation fold. All results below use the <strong>corrected metric</strong>.</p>
+<hr />
+<h2 id="3-experiment-timeline-result-directories">3. Experiment Timeline &amp; Result Directories<a class="headerlink" href="#3-experiment-timeline-result-directories" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Directory</th>
+<th>Date</th>
+<th>What it tests</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>thesis_pareto</code></td>
+<td>Feb 24</td>
+<td>D1 random sweep + 1-epoch E1 (4 models, 1 seed)</td>
+<td>Early baseline, pre-metric fix reference</td>
+</tr>
+<tr>
+<td><code>thesis_qfix</code></td>
+<td>Feb 24</td>
+<td>First run with corrected metric (4 models, 1 seed, 2 epochs)</td>
+<td>Confirmed fix works</td>
+</tr>
+<tr>
+<td><code>thesis_nvalcr</code></td>
+<td>Feb 24</td>
+<td>D1 diagnostic with nValCR/wValCR alternative metrics</td>
+<td>Metric analysis</td>
+</tr>
+<tr>
+<td><code>thesis_multiseed</code></td>
+<td>Feb 25</td>
+<td>5-seed multi-model run (9 models, 2 epochs, 30 trajs) — <strong>pre-fix basesim</strong></td>
+<td>Obsoleted by metric bug</td>
+</tr>
+<tr>
+<td><code>classical_baseline</code></td>
+<td>Feb 24</td>
+<td>RLSTCcode classical results (SGD, 1k–5k trajs, 5-fold CV)</td>
+<td>Valid reference</td>
+</tr>
+<tr>
+<td><code>comparison</code></td>
+<td>Feb 24</td>
+<td>Direct head-to-head comparison report</td>
+<td>Uses pre-fix Q-RLSTC numbers</td>
+</tr>
+<tr>
+<td><strong><code>thesis</code></strong></td>
+<td><strong>Feb 25</strong></td>
+<td><strong>Definitive E1 run: 9 models × 5 seeds × 3 epochs × 50 trajectories, corrected basesim</strong></td>
+<td><strong>Primary evidence</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>The <code>thesis/thesis_report_20260225_065747.md</code> is the canonical result.</strong> All numbers in this document come from that run unless otherwise noted.</p>
+</blockquote>
+<hr />
+<h2 id="4-models-tested-e1-core-quantum-utility">4. Models Tested (E1: Core Quantum Utility)<a class="headerlink" href="#4-models-tested-e1-core-quantum-utility" title="Permanent link">&para;</a></h2>
+<p>All 9 models share the same RL pipeline, replay buffer, epsilon schedule, and training data. Only the function approximator differs.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Params</th>
+<th>Optimizer</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>VQ-DQN (5q×3L)</strong></td>
+<td><strong>34</strong></td>
+<td><strong>SPSA</strong></td>
+<td><strong>Primary quantum model</strong></td>
+</tr>
+<tr>
+<td>MLP-34 (SPSA)</td>
+<td>34</td>
+<td>SPSA</td>
+<td>Iso-parameter classical control</td>
+</tr>
+<tr>
+<td>MLP-34 (Adam)</td>
+<td>34</td>
+<td>Adam</td>
+<td>Classical ceiling at same param count</td>
+</tr>
+<tr>
+<td>Control A (linear)</td>
+<td>12</td>
+<td>SPSA</td>
+<td>Minimal classical baseline</td>
+</tr>
+<tr>
+<td>Control B (h=64)</td>
+<td>514</td>
+<td>SPSA</td>
+<td>RLSTCcode-architecture classical control</td>
+</tr>
+<tr>
+<td>Control C (h=32×32)</td>
+<td>1,314</td>
+<td>SPSA</td>
+<td>Large classical control</td>
+</tr>
+<tr>
+<td>Control D (Adam linear)</td>
+<td>12</td>
+<td>Adam</td>
+<td>Adam classical baseline</td>
+</tr>
+<tr>
+<td>Control E (Adam h=64)</td>
+<td>514</td>
+<td>Adam</td>
+<td>Adam with RLSTCcode architecture</td>
+</tr>
+<tr>
+<td>Control F (Adam h=32×32)</td>
+<td>1,314</td>
+<td>Adam</td>
+<td>Adam large classical control</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-primary-results-corrected-e1-5-seed-summary">5. Primary Results (Corrected E1, 5-Seed Summary)<a class="headerlink" href="#5-primary-results-corrected-e1-5-seed-summary" title="Permanent link">&para;</a></h2>
+<h3 id="51-main-comparison-table">5.1 Main Comparison Table<a class="headerlink" href="#51-main-comparison-table" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Params</th>
+<th>ValCR (mean±std)</th>
+<th>CUT%</th>
+<th>#Segs</th>
+<th>Wall Time</th>
+<th>Q-margin</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>VQ-DQN (5q×3L)</strong></td>
+<td><strong>34</strong></td>
+<td><strong>0.4126 ± 0.3039</strong></td>
+<td>6% ± 5%</td>
+<td>141</td>
+<td>11,727s</td>
+<td>+0.762</td>
+</tr>
+<tr>
+<td>MLP-34 (SPSA)</td>
+<td>34</td>
+<td>0.7840 ± 0.2935</td>
+<td>1% ± 3%</td>
+<td>36</td>
+<td>45s</td>
+<td>+0.540</td>
+</tr>
+<tr>
+<td>MLP-34 (Adam)</td>
+<td>34</td>
+<td>0.4774 ± 0.1773</td>
+<td>1% ± 1%</td>
+<td>22</td>
+<td>57s</td>
+<td>+0.090</td>
+</tr>
+<tr>
+<td>Control A (linear)</td>
+<td>12</td>
+<td>0.4270 ± 0.3183</td>
+<td>4% ± 6%</td>
+<td>107</td>
+<td>48s</td>
+<td>+0.507</td>
+</tr>
+<tr>
+<td>Control B (h=64)</td>
+<td>514</td>
+<td>0.7185 ± 0.2567</td>
+<td>0% ± 0%</td>
+<td>9</td>
+<td>58s</td>
+<td>+0.270</td>
+</tr>
+<tr>
+<td>Control C (h=32×32)</td>
+<td>1,314</td>
+<td>0.5195 ± 0.1887</td>
+<td>2% ± 3%</td>
+<td>50</td>
+<td>69s</td>
+<td>+0.148</td>
+</tr>
+<tr>
+<td>Control D (Adam linear)</td>
+<td>12</td>
+<td>0.4125 ± 0.1612</td>
+<td>1% ± 1%</td>
+<td>24</td>
+<td>46s</td>
+<td>+0.069</td>
+</tr>
+<tr>
+<td>Control E (Adam h=64)</td>
+<td>514</td>
+<td>0.4696 ± 0.2872</td>
+<td>3% ± 5%</td>
+<td>85</td>
+<td>63s</td>
+<td>+0.194</td>
+</tr>
+<tr>
+<td>Control F (Adam h=32×32)</td>
+<td>1,314</td>
+<td>0.4777 ± 0.1590</td>
+<td>1% ± 2%</td>
+<td>30</td>
+<td>77s</td>
+<td>+0.322</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-key-observations">5.2 Key Observations<a class="headerlink" href="#52-key-observations" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>VQ-DQN achieves the best mean ValCR (0.4126) among all SPSA-trained models</strong>, beating:</li>
+<li>MLP-34 SPSA (0.7840) — same parameter count, <strong>47% worse</strong></li>
+<li>Control B h=64 (0.7185) — 514 params (15× more), <strong>74% worse</strong></li>
+<li>
+<p>Control C h=32×32 (0.5195) — 1,314 params (39× more), <strong>26% worse</strong></p>
+</li>
+<li>
+<p><strong>Adam-trained models close the gap</strong>: Control D (Adam linear, 12 params) achieves 0.4125, essentially matching VQ-DQN. This tells us the quantum advantage is <strong>optimizer-specific</strong> — when you have access to gradient-based optimisation, classical networks do fine.</p>
+</li>
+<li>
+<p><strong>High variance is real</strong>: VQ-DQN's std of 0.3039 reflects genuine seed sensitivity. Some seeds (42, 2025) achieve excellent CR &lt; 0.15, while seed 7 collapses into a never-cut policy (CR = 1.0). This is a known failure mode we document.</p>
+</li>
+<li>
+<p><strong>Training time</strong>: VQ-DQN is ~200× slower (11,727s vs ~50s) due to quantum circuit simulation. The value proposition is parameter footprint (34 params = 136 bytes), not speed.</p>
+</li>
+</ol>
+<hr />
+<h2 id="6-classical-baseline-context-rlstccode">6. Classical Baseline Context (RLSTCcode)<a class="headerlink" href="#6-classical-baseline-context-rlstccode" title="Permanent link">&para;</a></h2>
+<p>From the <code>classical_baseline</code> report, the original RLSTCcode system achieves:</p>
+<table>
+<thead>
+<tr>
+<th>Configuration</th>
+<th>Val CR</th>
+<th>Training Data</th>
+<th>Optimizer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Best single run (3k trajs)</td>
+<td><strong>0.5892</strong></td>
+<td>3,000 trajectories</td>
+<td>SGD</td>
+</tr>
+<tr>
+<td>5-fold CV mean</td>
+<td><strong>0.7543 ± 0.0369</strong></td>
+<td>~4,000 trajectories</td>
+<td>SGD</td>
+</tr>
+<tr>
+<td>1k trajectories</td>
+<td>0.7387</td>
+<td>1,000 trajectories</td>
+<td>SGD</td>
+</tr>
+<tr>
+<td>5k trajectories</td>
+<td>0.6710</td>
+<td>5,000 trajectories</td>
+<td>SGD</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Important caveat</strong>: RLSTCcode uses <strong>SGD (backpropagation)</strong> with <strong>100× more data</strong> (3,000 vs 50 trajectories). This is <strong>not</strong> a controlled comparison — it conflates optimizer, data scale, and model architecture.</p>
+<h3 id="cross-system-summary">Cross-System Summary<a class="headerlink" href="#cross-system-summary" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>System</th>
+<th>Best CR</th>
+<th>Params</th>
+<th>Data</th>
+<th>Optimizer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RLSTCcode (best)</td>
+<td>0.5892</td>
+<td>514</td>
+<td>3,000 trajs</td>
+<td>SGD</td>
+</tr>
+<tr>
+<td><strong>Q-RLSTC VQ-DQN</strong></td>
+<td><strong>0.4126</strong></td>
+<td><strong>34</strong></td>
+<td><strong>50 trajs</strong></td>
+<td><strong>SPSA</strong></td>
+</tr>
+<tr>
+<td>Q-RLSTC VQ-DQN (best seed)</td>
+<td>~0.13</td>
+<td>34</td>
+<td>50 trajs</td>
+<td>SPSA</td>
+</tr>
+</tbody>
+</table>
+<p>The VQ-DQN's mean CR of 0.4126 is actually <strong>better</strong> than RLSTCcode's 0.5892, but the high variance (some seeds collapse) means this comparison must be interpreted carefully. The median is more robust.</p>
+<hr />
+<h2 id="7-metric-degeneracy-discovery-d1-diagnostic">7. Metric Degeneracy Discovery (D1 Diagnostic)<a class="headerlink" href="#7-metric-degeneracy-discovery-d1-diagnostic" title="Permanent link">&para;</a></h2>
+<p>The D1 diagnostic revealed a fundamental problem with ValCR:</p>
+<table>
+<thead>
+<tr>
+<th>Random CUT%</th>
+<th>Actual CUT%</th>
+<th>ValCR</th>
+<th>#Segs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0%</td>
+<td>0.0%</td>
+<td>9.2051</td>
+<td>3</td>
+</tr>
+<tr>
+<td>5%</td>
+<td>4.6%</td>
+<td>1.5032</td>
+<td>67</td>
+</tr>
+<tr>
+<td>50%</td>
+<td>32.3%</td>
+<td>1.4311</td>
+<td>453</td>
+</tr>
+<tr>
+<td>100%</td>
+<td>49.7%</td>
+<td>1.4193</td>
+<td>696</td>
+</tr>
+</tbody>
+</table>
+<p><strong>A random agent with no learning reduces ValCR from 9.2 to 1.4 just by cutting more.</strong> This means ValCR is structurally biased toward over-segmentation. We mitigate this with:
+- <strong>Budget-constrained evaluation</strong>: Compare models at matched CUT% thresholds
+- <strong>Reward shaping</strong>: CUT_PENALTY (0.12) and L_MIN (3) in the reward function
+- <strong>Pareto analysis</strong>: Plot each model's (CUT%, ValCR) against the random baseline curve</p>
+<hr />
+<h2 id="8-the-metric-bug-and-its-fix">8. The Metric Bug and Its Fix<a class="headerlink" href="#8-the-metric-bug-and-its-fix" title="Permanent link">&para;</a></h2>
+<h3 id="what-went-wrong">What Went Wrong<a class="headerlink" href="#what-went-wrong" title="Permanent link">&para;</a></h3>
+<p><code>basesim</code> (the denominator of ValCR) was precomputed as a static scalar from the full dataset. It didn't change when the validation fold changed across seeds.</p>
+<h3 id="what-this-caused">What This Caused<a class="headerlink" href="#what-this-caused" title="Permanent link">&para;</a></h3>
+<ul>
+<li>CR values &gt; 1.0 everywhere in <code>thesis_multiseed</code> (7.17, 9.21, etc.)</li>
+<li>Quantized plateaus where many seeds reported identical CR</li>
+<li>Artificial variance masquerading as policy instability</li>
+</ul>
+<h3 id="how-we-fixed-it">How We Fixed It<a class="headerlink" href="#how-we-fixed-it" title="Permanent link">&para;</a></h3>
+<p>Compute <code>basesim</code> dynamically per validation fold by running an "always-extend" baseline policy on the fold's data. This restores ValCR as a genuine competitive ratio.</p>
+<h3 id="evidence-the-fix-works">Evidence the Fix Works<a class="headerlink" href="#evidence-the-fix-works" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>thesis_qfix</code> (single seed, corrected): VQ-DQN CR = 1.4811 (still above 1.0 because that run used older settings)</li>
+<li><code>thesis</code> (5 seeds, corrected, 50 trajs, 3 epochs): VQ-DQN CR = <strong>0.4126</strong> — now below 1.0, meaning the agent genuinely improves clustering</li>
+</ul>
+<hr />
+<h2 id="9-what-this-means-for-the-thesis">9. What This Means for the Thesis<a class="headerlink" href="#9-what-this-means-for-the-thesis" title="Permanent link">&para;</a></h2>
+<h3 id="claims-we-can-make">Claims We Can Make<a class="headerlink" href="#claims-we-can-make" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>C1 — Metric degeneracy</strong>: ValCR has a structural fragmentation attractor. Budget-constrained evaluation is necessary for fair comparison. (Independent contribution, no quantum needed.)</li>
+<li><strong>C2 — Framework</strong>: Q-RLSTC is a modular hybrid quantum-classical RL framework with controlled substitution design.</li>
+<li><strong>C3 — Regime-specific competitiveness</strong>: Under SPSA + small data, VQ-DQN (34 params) is competitive with classical networks up to 39× larger. This is the core empirical contribution.</li>
+<li><strong>C4 — NISQ feasibility</strong>: The circuit design (5 qubits, ~15 depth) is within NISQ constraints.</li>
+<li><strong>C5 — Metric autopsy</strong>: The basesim bug discovery and fix demonstrates rigorous metric validation.</li>
+</ol>
+<h3 id="claims-we-cannot-make">Claims We Cannot Make<a class="headerlink" href="#claims-we-cannot-make" title="Permanent link">&para;</a></h3>
+<ul>
+<li>❌ "Quantum advantage" in a broad sense — Adam+classical networks match or beat VQ-DQN when gradient access is available</li>
+<li>❌ Hardware demonstration — all experiments are simulation-based</li>
+<li>❌ Generalisation beyond T-Drive GPS data</li>
+</ul>
+<hr />
+<h2 id="10-open-questions-for-discussion">10. Open Questions for Discussion<a class="headerlink" href="#10-open-questions-for-discussion" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Seed sensitivity</strong>: 2 of 5 seeds show never-cut collapse for VQ-DQN. Is this acceptable variance or a design problem?</li>
+<li><strong>Adam parity</strong>: The Adam-trained linear model (12 params!) matches VQ-DQN's CR. Does the SPSA-specific advantage carry enough weight?</li>
+<li><strong>More epochs</strong>: The current results use 3 epochs. Would more training time narrow the quantum-classical gap further?</li>
+<li><strong>The comparison report</strong> (<code>comparison/comparison_report.md</code>) uses pre-fix numbers. Should we regenerate it with corrected basesim?</li>
+</ol>
+<hr />
+<h2 id="11-file-reference">11. File Reference<a class="headerlink" href="#11-file-reference" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>results/thesis/thesis_report_20260225_065747.md</code></td>
+<td><strong>Primary E1 results</strong> (corrected, 9 models, 5 seeds, 3 epochs)</td>
+</tr>
+<tr>
+<td><code>results/thesis/plots/</code></td>
+<td>Plots: ValCR comparison, CUT evolution, Pareto frontier</td>
+</tr>
+<tr>
+<td><code>results/classical_baseline/classical_report.md</code></td>
+<td>RLSTCcode baseline (SGD, 1k–5k trajs)</td>
+</tr>
+<tr>
+<td><code>results/comparison/comparison_report.md</code></td>
+<td>Head-to-head comparison (pre-fix numbers)</td>
+</tr>
+<tr>
+<td><code>results/thesis_nvalcr/</code></td>
+<td>D1 diagnostic with alternative metrics</td>
+</tr>
+<tr>
+<td><code>results/thesis_qfix/</code></td>
+<td>First corrected-metric run</td>
+</tr>
+<tr>
+<td><code>results/thesis_multiseed/</code></td>
+<td>Pre-fix multi-seed run (obsoleted by metric bug)</td>
+</tr>
+<tr>
+<td><code>results/thesis_pareto/</code></td>
+<td>Early Pareto + D1 baseline</td>
+</tr>
+<tr>
+<td><code>docs/thesis_outline/chapter4.md</code></td>
+<td>Experimental methodology chapter</td>
+</tr>
+<tr>
+<td><code>docs/thesis_outline/chapter5.md</code></td>
+<td>Conclusions and future work</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
