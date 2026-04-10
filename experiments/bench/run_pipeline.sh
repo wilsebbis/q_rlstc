@@ -8,8 +8,10 @@ echo "========================================"
 
 echo "[1/4] Ensuring dependencies are installed..."
 # Install standard numeric, quantum, and plotting dependencies
-python3 -m pip install numpy qiskit qiskit-aer matplotlib tensorflow==1.15.0 || \
-    echo "Note: If running Python 3.6, some dependencies might require specific older versions. Proceeding..."
+python3 -m pip install numpy matplotlib || true
+python3 -m pip install qiskit qiskit-aer || true
+python3 -m pip install tensorflow==1.15.0 || \
+    echo "Note: TensorFlow 1.15 requires Python 3.6. Proceeding without it (Classical outputs will fallback)..."
 
 echo "[2/4] Running Classical Paper Baseline..."
 PYTHONPATH=. python3 experiments/bench/run_bench.py --mode paper_baseline --backend classical
