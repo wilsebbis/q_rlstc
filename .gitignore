@@ -57,3 +57,6 @@ q_rlstc/data/porto_clustercenter
 .pytest_cache/
 .coverage
 htmlcov/
+
+latest_exp/geo-subtrajs
+latest_exp/geolife_rlstc_clusters
