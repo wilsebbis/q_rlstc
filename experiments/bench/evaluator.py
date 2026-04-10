@@ -101,7 +101,11 @@ def run_quantum_baseline(config):
         elist = [i for i in range(config.amount)]
         
     except Exception as e:
+        import traceback
         print(f"Error loading Quantum baseline dependencies: {e}")
+        print("--- FULL TRACEBACK ---")
+        print(traceback.format_exc())
+        print("----------------------")
         print("Injecting placeholder simulated quantum output for scaffolding...")
         return {"OD": 34.50, "runtime": 121.0}
 
