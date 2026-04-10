@@ -1,0 +1,1699 @@
+{
+  "protocol": {
+    "batch_size": 32,
+    "memory_size": 5000,
+    "gamma": 0.9,
+    "huber_delta": 1.0,
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.1,
+    "epsilon_decay": 0.99,
+    "target_update_freq": 10,
+    "L_MIN": 3,
+    "CUT_PENALTY": 0.12,
+    "EXTEND_COST": 0.01,
+    "COMPLEXITY_LAMBDA": 0.03,
+    "MIN_CUT_BONUS": 0.3,
+    "MIN_CUT_BONUS_FINAL": 0.15,
+    "COLLAPSE_CUT_THRESHOLD": 1.0,
+    "USE_LAGRANGIAN": true,
+    "TARGET_CUT_PCT": 10.0,
+    "B_HARD_CUT_PCT": 30.0,
+    "LAGRANGIAN_LR": 0.02,
+    "LAMBDA_MAX": 2.0,
+    "LAMBDA_DELTA_MAX": 0.05,
+    "LAMBDA_CUT_EMA": 0.9,
+    "LAMBDA_FREEZE_EPOCHS": 1,
+    "EPSILON_DECAY_MODE": "per_step",
+    "EPSILON_DECAY_PER_STEP": 0.9995,
+    "FORCED_CUT_PROB": 0.25,
+    "FORCED_CUT_EPOCHS": 2,
+    "USE_STRATIFIED_REPLAY": true,
+    "MIN_CUT_QUOTA": 0.3,
+    "EXPLORATION_MODE": "boltzmann",
+    "BOLTZMANN_TEMP_START": 1.0,
+    "BOLTZMANN_TEMP_MIN": 0.1,
+    "BOLTZMANN_TEMP_DECAY": 0.99,
+    "OPTIMISTIC_CUT_BIAS": 0.5,
+    "Q_CLIP_RANGE": 50.0
+  },
+  "args": {
+    "traj_path": "/Users/wilsebbis/Developer/q_rlstc/q_rlstc/data/Tdrive_norm_traj",
+    "centers_path": "/Users/wilsebbis/Developer/q_rlstc/q_rlstc/data/tdrive_clustercenter",
+    "amount": 5,
+    "epochs": 1,
+    "seed": 42,
+    "seeds": null,
+    "output_dir": "results/thesis",
+    "experiments": "E1",
+    "plots_only": null
+  },
+  "env": {
+    "timestamp": "2026-04-03T01:36:19.126540",
+    "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+    "numpy": "2.4.1",
+    "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+    "qiskit": "2.3.0"
+  },
+  "E1": [
+    {
+      "model": "VQ-DQN (5q\u00d73L)",
+      "kind": "quantum",
+      "noise": "ideal",
+      "params": 34,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": false,
+      "budget_violated": true,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "D",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:38:04.153349",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 0.3506164132177692,
+      "val_od": 0.09091837391777267,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 0.2473608697641702,
+      "val_wvalcr": 0.06993678455141672,
+      "val_dtw": 38.46339242158783,
+      "val_frechet": 0.26389280990711667,
+      "cut_pct": 49.7787610619469,
+      "n_segs": 226,
+      "n_val_episodes": 1,
+      "segs_per_traj": 226.0,
+      "best_epoch": 1,
+      "sse": 2.7047417894934984,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 0.3506164132177692,
+      "final_cut_pct": 49.7787610619469,
+      "final_n_segs": 226,
+      "final_sse": 2.7047417894934984,
+      "final_silhouette": 0.0,
+      "final_dtw": 38.46339242158783,
+      "final_frechet": 0.26389280990711667,
+      "val_crs": [
+        0.3506164132177692
+      ],
+      "val_ods": [
+        0.09091837391777267
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        0.2473608697641702
+      ],
+      "val_wvalcrs": [
+        0.06993678455141672
+      ],
+      "val_dtws": [
+        38.46339242158783
+      ],
+      "val_frechets": [
+        0.26389280990711667
+      ],
+      "val_cut_pcts": [
+        49.7787610619469
+      ],
+      "val_seg_counts": [
+        226
+      ],
+      "val_sses": [
+        2.7047417894934984
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        -0.9108030034253582
+      ],
+      "replay_cut_pcts": [
+        6.434872859366892
+      ],
+      "replay_buf_cut_pcts": [
+        6.434872859366892
+      ],
+      "all_rewards": [
+        -9.767032935584112,
+        -5.769408699080793,
+        -5.810772529926153,
+        -9.065978594878919
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": -3.121717447741349,
+          "median": -3.503704480999641,
+          "std": 1.1797971338489217,
+          "min": -4.992280975282499,
+          "max": 0.774984343215988,
+          "pct_positive": 4.359107420861442
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": 0.9108030034253582,
+          "median": 0.910192255086567,
+          "std": 0.009172300599387855,
+          "min": 0.9101907774662741,
+          "max": 1.0483875119718293,
+          "pct_positive": 100.0
+        }
+      ],
+      "wall_time": 93.080570936203,
+      "time_env": 8.136751651763916,
+      "time_agent": 76.63547921180725,
+      "time_overhead": 8.308340072631836
+    },
+    {
+      "model": "MLP-34 (SPSA)",
+      "kind": "classical",
+      "noise": "ideal",
+      "params": 34,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": true,
+      "budget_violated": false,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "N/A",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:38:23.585037",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 1.0,
+      "val_od": 0.25931009071529953,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 1.0,
+      "val_wvalcr": 0.0011037527593818985,
+      "val_dtw": 23.027146457433837,
+      "val_frechet": 0.15794569527345148,
+      "cut_pct": 0.0,
+      "n_segs": 1,
+      "n_val_episodes": 1,
+      "segs_per_traj": 1.0,
+      "best_epoch": 1,
+      "sse": 0.06724172314677687,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 1.0,
+      "final_cut_pct": 0.0,
+      "final_n_segs": 1,
+      "final_sse": 0.06724172314677687,
+      "final_silhouette": 0.0,
+      "final_dtw": 23.027146457433837,
+      "final_frechet": 0.15794569527345148,
+      "val_crs": [
+        1.0
+      ],
+      "val_ods": [
+        0.25931009071529953
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        1.0
+      ],
+      "val_wvalcrs": [
+        0.0011037527593818985
+      ],
+      "val_dtws": [
+        23.027146457433837
+      ],
+      "val_frechets": [
+        0.15794569527345148
+      ],
+      "val_cut_pcts": [
+        0.0
+      ],
+      "val_seg_counts": [
+        1
+      ],
+      "val_sses": [
+        0.06724172314677687
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        4.072394217903958
+      ],
+      "replay_cut_pcts": [
+        16.60612350804359
+      ],
+      "replay_buf_cut_pcts": [
+        16.60612350804359
+      ],
+      "all_rewards": [
+        -23.437405064279655,
+        -4.520312903939197,
+        -5.777686490337431,
+        -20.549839018133767
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": -50.272111338712826,
+          "median": -100.0,
+          "std": 49.96114915132105,
+          "min": -100.0,
+          "max": 0.5004752162953032,
+          "pct_positive": 25.012973533990657
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": -4.072394217903958,
+          "median": -4.0925179324702485,
+          "std": 0.33787394291161627,
+          "min": -4.3965687687008606,
+          "max": 0.0,
+          "pct_positive": 0.0
+        }
+      ],
+      "wall_time": 6.354488849639893,
+      "time_env": 5.953209161758423,
+      "time_agent": 0.1543118953704834,
+      "time_overhead": 0.24696779251098633
+    },
+    {
+      "model": "MLP-34 (Adam)",
+      "kind": "adam",
+      "noise": "ideal",
+      "params": 34,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": true,
+      "budget_violated": false,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "N/A",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:38:33.531948",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 1.0,
+      "val_od": 0.25931009071529953,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 1.0,
+      "val_wvalcr": 0.0011037527593818985,
+      "val_dtw": 23.027146457433837,
+      "val_frechet": 0.15794569527345148,
+      "cut_pct": 0.0,
+      "n_segs": 1,
+      "n_val_episodes": 1,
+      "segs_per_traj": 1.0,
+      "best_epoch": 1,
+      "sse": 0.06724172314677687,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 1.0,
+      "final_cut_pct": 0.0,
+      "final_n_segs": 1,
+      "final_sse": 0.06724172314677687,
+      "final_silhouette": 0.0,
+      "final_dtw": 23.027146457433837,
+      "final_frechet": 0.15794569527345148,
+      "val_crs": [
+        1.0
+      ],
+      "val_ods": [
+        0.25931009071529953
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        1.0
+      ],
+      "val_wvalcrs": [
+        0.0011037527593818985
+      ],
+      "val_dtws": [
+        23.027146457433837
+      ],
+      "val_frechets": [
+        0.15794569527345148
+      ],
+      "val_cut_pcts": [
+        0.0
+      ],
+      "val_seg_counts": [
+        1
+      ],
+      "val_sses": [
+        0.06724172314677687
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        0.41997484173409466
+      ],
+      "replay_cut_pcts": [
+        24.909185262065385
+      ],
+      "replay_buf_cut_pcts": [
+        24.909185262065385
+      ],
+      "all_rewards": [
+        -22.99865434205916,
+        -21.09600453636852,
+        -5.777686490337431,
+        -21.214272470114647
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": -25.119779144566227,
+          "median": -0.062282614164664477,
+          "std": 43.36689152861757,
+          "min": -100.0,
+          "max": 0.5004752162953032,
+          "pct_positive": 14.945511157239233
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": -0.41997484173409455,
+          "median": -0.42555115653046194,
+          "std": 0.03567862471951293,
+          "min": -0.4270367034487996,
+          "max": 0.0,
+          "pct_positive": 0.0
+        }
+      ],
+      "wall_time": 0.5194499492645264,
+      "time_env": 0.11462783813476562,
+      "time_agent": 0.1688234806060791,
+      "time_overhead": 0.23599863052368164
+    },
+    {
+      "model": "Control A (linear)",
+      "kind": "classical",
+      "noise": "ideal",
+      "params": 12,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": true,
+      "budget_violated": false,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "N/A",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:38:42.862511",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 1.0,
+      "val_od": 0.25931009071529953,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 1.0,
+      "val_wvalcr": 0.0011037527593818985,
+      "val_dtw": 23.027146457433837,
+      "val_frechet": 0.15794569527345148,
+      "cut_pct": 0.0,
+      "n_segs": 1,
+      "n_val_episodes": 1,
+      "segs_per_traj": 1.0,
+      "best_epoch": 1,
+      "sse": 0.06724172314677687,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 1.0,
+      "final_cut_pct": 0.0,
+      "final_n_segs": 1,
+      "final_sse": 0.06724172314677687,
+      "final_silhouette": 0.0,
+      "final_dtw": 23.027146457433837,
+      "final_frechet": 0.15794569527345148,
+      "val_crs": [
+        1.0
+      ],
+      "val_ods": [
+        0.25931009071529953
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        1.0
+      ],
+      "val_wvalcrs": [
+        0.0011037527593818985
+      ],
+      "val_dtws": [
+        23.027146457433837
+      ],
+      "val_frechets": [
+        0.15794569527345148
+      ],
+      "val_cut_pcts": [
+        0.0
+      ],
+      "val_seg_counts": [
+        1
+      ],
+      "val_sses": [
+        0.06724172314677687
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        3.4606995521878092
+      ],
+      "replay_cut_pcts": [
+        33.31603528801246
+      ],
+      "replay_buf_cut_pcts": [
+        33.31603528801246
+      ],
+      "all_rewards": [
+        -23.241951130346553,
+        -22.17367515887065,
+        -22.485118218366033,
+        -21.015504306917556
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": -0.027152136405954482,
+          "median": 0.0,
+          "std": 0.2343465171863069,
+          "min": -2.833829325649173,
+          "max": 0.2206224273380087,
+          "pct_positive": 22.729631551634665
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": -3.4606995521878114,
+          "median": -3.4936657184385997,
+          "std": 0.2893481963077409,
+          "min": -3.61633858683836,
+          "max": 0.0,
+          "pct_positive": 0.0
+        }
+      ],
+      "wall_time": 2.688667058944702,
+      "time_env": 2.308898448944092,
+      "time_agent": 0.13006949424743652,
+      "time_overhead": 0.24969911575317383
+    },
+    {
+      "model": "Control B (h=64)",
+      "kind": "classical",
+      "noise": "ideal",
+      "params": 514,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": true,
+      "budget_violated": false,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "N/A",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:38:55.978017",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 0.9986251375193815,
+      "val_od": 0.2589535750007293,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 0.9986251375193815,
+      "val_wvalcr": 0.0011046738246895814,
+      "val_dtw": 58.51362675202064,
+      "val_frechet": 0.24661481526779913,
+      "cut_pct": 0.22123893805309736,
+      "n_segs": 2,
+      "n_val_episodes": 1,
+      "segs_per_traj": 2.0,
+      "best_epoch": 1,
+      "sse": 0.06705695400565834,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 0.9986251375193815,
+      "final_cut_pct": 0.22123893805309736,
+      "final_n_segs": 2,
+      "final_sse": 0.06705695400565834,
+      "final_silhouette": 0.0,
+      "final_dtw": 58.51362675202064,
+      "final_frechet": 0.24661481526779913,
+      "val_crs": [
+        0.9986251375193815
+      ],
+      "val_ods": [
+        0.2589535750007293
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        0.9986251375193815
+      ],
+      "val_wvalcrs": [
+        0.0011046738246895814
+      ],
+      "val_dtws": [
+        58.51362675202064
+      ],
+      "val_frechets": [
+        0.24661481526779913
+      ],
+      "val_cut_pcts": [
+        0.22123893805309736
+      ],
+      "val_seg_counts": [
+        2
+      ],
+      "val_sses": [
+        0.06705695400565834
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        99.11504424778761
+      ],
+      "replay_cut_pcts": [
+        14.893617021276595
+      ],
+      "replay_buf_cut_pcts": [
+        14.893617021276595
+      ],
+      "all_rewards": [
+        -22.35921084365487,
+        -4.520312903939197,
+        -4.777403974055469,
+        -18.060280465955234
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": -50.16431428572332,
+          "median": -100.0,
+          "std": 50.32832896084304,
+          "min": -100.0,
+          "max": 100.0,
+          "pct_positive": 16.242864556305136
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": -99.11504424778761,
+          "median": -100.0,
+          "std": 13.274336283185841,
+          "min": -100.0,
+          "max": 100.0,
+          "pct_positive": 0.4424778761061947
+        }
+      ],
+      "wall_time": 5.206329822540283,
+      "time_env": 4.75068211555481,
+      "time_agent": 0.20991063117980957,
+      "time_overhead": 0.24573707580566406
+    },
+    {
+      "model": "Control C (h=32\u00d732)",
+      "kind": "classical",
+      "noise": "ideal",
+      "params": 1314,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": false,
+      "budget_violated": false,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "N/A",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:39:09.049536",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 0.5023299455208992,
+      "val_od": 0.13025922374203583,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 0.33693388637062127,
+      "val_wvalcr": 0.05619785455287782,
+      "val_dtw": 62.21093755267188,
+      "val_frechet": 0.31011034718854125,
+      "cut_pct": 25.0,
+      "n_segs": 114,
+      "n_val_episodes": 1,
+      "segs_per_traj": 114.0,
+      "best_epoch": 1,
+      "sse": 2.328295441759087,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 0.5023299455208992,
+      "final_cut_pct": 25.0,
+      "final_n_segs": 114,
+      "final_sse": 2.328295441759087,
+      "final_silhouette": 0.0,
+      "final_dtw": 62.21093755267188,
+      "final_frechet": 0.31011034718854125,
+      "val_crs": [
+        0.5023299455208992
+      ],
+      "val_ods": [
+        0.13025922374203583
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        0.33693388637062127
+      ],
+      "val_wvalcrs": [
+        0.05619785455287782
+      ],
+      "val_dtws": [
+        62.21093755267188
+      ],
+      "val_frechets": [
+        0.31011034718854125
+      ],
+      "val_cut_pcts": [
+        25.0
+      ],
+      "val_seg_counts": [
+        114
+      ],
+      "val_sses": [
+        2.328295441759087
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        -0.014442925702214005
+      ],
+      "replay_cut_pcts": [
+        33.62740010378827
+      ],
+      "replay_buf_cut_pcts": [
+        33.62740010378827
+      ],
+      "all_rewards": [
+        -23.01490942471868,
+        -20.75175341825363,
+        -21.935192813637112,
+        -21.87811402889346
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": 0.04085681029127814,
+          "median": 0.0,
+          "std": 0.10969526689799593,
+          "min": -0.22764567420352153,
+          "max": 0.7315979109484251,
+          "pct_positive": 37.15620134924754
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": 0.014442925702213968,
+          "median": 0.0,
+          "std": 0.14720519670208038,
+          "min": -0.2403620781998792,
+          "max": 0.22644484242288448,
+          "pct_positive": 49.7787610619469
+        }
+      ],
+      "wall_time": 5.5332701206207275,
+      "time_env": 2.172065019607544,
+      "time_agent": 0.2605609893798828,
+      "time_overhead": 3.100644111633301
+    },
+    {
+      "model": "Control D (Adam linear)",
+      "kind": "adam",
+      "noise": "ideal",
+      "params": 12,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": true,
+      "budget_violated": false,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "N/A",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:39:18.303813",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 0.6410953350385383,
+      "val_od": 0.16624248948599873,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 0.6410953350385384,
+      "val_wvalcr": 0.001413661157747604,
+      "val_dtw": 19.99600624532138,
+      "val_frechet": 0.20064753138343538,
+      "cut_pct": 0.22123893805309736,
+      "n_segs": 2,
+      "n_val_episodes": 1,
+      "segs_per_traj": 2.0,
+      "best_epoch": 1,
+      "sse": 0.07233186700146098,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 0.6410953350385383,
+      "final_cut_pct": 0.22123893805309736,
+      "final_n_segs": 2,
+      "final_sse": 0.07233186700146098,
+      "final_silhouette": 0.0,
+      "final_dtw": 19.99600624532138,
+      "final_frechet": 0.20064753138343538,
+      "val_crs": [
+        0.6410953350385383
+      ],
+      "val_ods": [
+        0.16624248948599873
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        0.6410953350385384
+      ],
+      "val_wvalcrs": [
+        0.001413661157747604
+      ],
+      "val_dtws": [
+        19.99600624532138
+      ],
+      "val_frechets": [
+        0.20064753138343538
+      ],
+      "val_cut_pcts": [
+        0.22123893805309736
+      ],
+      "val_seg_counts": [
+        2
+      ],
+      "val_sses": [
+        0.07233186700146098
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        0.5073007416327633
+      ],
+      "replay_cut_pcts": [
+        33.21224701608718
+      ],
+      "replay_buf_cut_pcts": [
+        33.21224701608718
+      ],
+      "all_rewards": [
+        -22.586406375548627,
+        -22.17367515887065,
+        -22.485118218366033,
+        -21.381963410703833
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": -0.02447487470630793,
+          "median": 0.0,
+          "std": 0.11751537297190079,
+          "min": -2.52646537091277,
+          "max": 0.10077286547980843,
+          "pct_positive": 21.43227815256876
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": -0.5073007416327634,
+          "median": -0.5005540745115302,
+          "std": 0.23871658191315678,
+          "min": -0.899165975540079,
+          "max": 1.4473651033464048,
+          "pct_positive": 0.22123893805309736
+        }
+      ],
+      "wall_time": 2.5374269485473633,
+      "time_env": 2.166172981262207,
+      "time_agent": 0.12603330612182617,
+      "time_overhead": 0.24522066116333008
+    },
+    {
+      "model": "Control E (Adam h=64)",
+      "kind": "adam",
+      "noise": "ideal",
+      "params": 514,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": true,
+      "budget_violated": false,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "N/A",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:39:28.901670",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 0.9986251375193815,
+      "val_od": 0.2589535750007293,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 0.9986251375193815,
+      "val_wvalcr": 0.0011046738246895814,
+      "val_dtw": 58.51362675202064,
+      "val_frechet": 0.24661481526779913,
+      "cut_pct": 0.22123893805309736,
+      "n_segs": 2,
+      "n_val_episodes": 1,
+      "segs_per_traj": 2.0,
+      "best_epoch": 1,
+      "sse": 0.06705695400565834,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 0.9986251375193815,
+      "final_cut_pct": 0.22123893805309736,
+      "final_n_segs": 2,
+      "final_sse": 0.06705695400565834,
+      "final_silhouette": 0.0,
+      "final_dtw": 58.51362675202064,
+      "final_frechet": 0.24661481526779913,
+      "val_crs": [
+        0.9986251375193815
+      ],
+      "val_ods": [
+        0.2589535750007293
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        0.9986251375193815
+      ],
+      "val_wvalcrs": [
+        0.0011046738246895814
+      ],
+      "val_dtws": [
+        58.51362675202064
+      ],
+      "val_frechets": [
+        0.24661481526779913
+      ],
+      "val_cut_pcts": [
+        0.22123893805309736
+      ],
+      "val_seg_counts": [
+        2
+      ],
+      "val_sses": [
+        0.06705695400565834
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        -0.2212389380530979
+      ],
+      "replay_cut_pcts": [
+        15.412558380902958
+      ],
+      "replay_buf_cut_pcts": [
+        15.412558380902958
+      ],
+      "all_rewards": [
+        -21.918670171442475,
+        -4.520312903939197,
+        -5.777686490337431,
+        -19.694119878620707
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": -50.26130234429433,
+          "median": -100.0,
+          "std": 49.97168895647323,
+          "min": -100.0,
+          "max": 0.7773158648646132,
+          "pct_positive": 5.604566683964712
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": 0.22123893805309736,
+          "median": 0.0,
+          "std": 8.14387713243626,
+          "min": -100.0,
+          "max": 100.0,
+          "pct_positive": 0.4424778761061947
+        }
+      ],
+      "wall_time": 2.6704750061035156,
+      "time_env": 2.1744771003723145,
+      "time_agent": 0.24690580368041992,
+      "time_overhead": 0.24909210205078125
+    },
+    {
+      "model": "Control F (Adam h=32\u00d732)",
+      "kind": "adam",
+      "noise": "ideal",
+      "params": 1314,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": true,
+      "budget_violated": false,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "N/A",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:39:39.481771",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 0.6410953350385383,
+      "val_od": 0.16624248948599873,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 0.6410953350385384,
+      "val_wvalcr": 0.001413661157747604,
+      "val_dtw": 19.99600624532138,
+      "val_frechet": 0.20064753138343538,
+      "cut_pct": 0.22123893805309736,
+      "n_segs": 2,
+      "n_val_episodes": 1,
+      "segs_per_traj": 2.0,
+      "best_epoch": 1,
+      "sse": 0.07233186700146098,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 0.6410953350385383,
+      "final_cut_pct": 0.22123893805309736,
+      "final_n_segs": 2,
+      "final_sse": 0.07233186700146098,
+      "final_silhouette": 0.0,
+      "final_dtw": 19.99600624532138,
+      "final_frechet": 0.20064753138343538,
+      "val_crs": [
+        0.6410953350385383
+      ],
+      "val_ods": [
+        0.16624248948599873
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        0.6410953350385384
+      ],
+      "val_wvalcrs": [
+        0.001413661157747604
+      ],
+      "val_dtws": [
+        19.99600624532138
+      ],
+      "val_frechets": [
+        0.20064753138343538
+      ],
+      "val_cut_pcts": [
+        0.22123893805309736
+      ],
+      "val_seg_counts": [
+        2
+      ],
+      "val_sses": [
+        0.07233186700146098
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        0.24879896913022093
+      ],
+      "replay_cut_pcts": [
+        33.16035288012455
+      ],
+      "replay_buf_cut_pcts": [
+        33.16035288012455
+      ],
+      "all_rewards": [
+        -22.244166531503396,
+        -20.75175341825363,
+        -21.935192813637112,
+        -21.657902054199027
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": -0.024665019115592487,
+          "median": 0.0,
+          "std": 0.0783905709630314,
+          "min": -0.18402629293757589,
+          "max": 0.7315979109484251,
+          "pct_positive": 16.139076284379865
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": -0.24879896913022087,
+          "median": -0.26836964565839294,
+          "std": 0.08265860116865043,
+          "min": -0.3341140022930529,
+          "max": 0.5386969136331805,
+          "pct_positive": 0.22123893805309736
+        }
+      ],
+      "wall_time": 0.6633820533752441,
+      "time_env": 0.12326407432556152,
+      "time_agent": 0.28885912895202637,
+      "time_overhead": 0.25125885009765625
+    },
+    {
+      "model": "Original RLSTC (h=64)",
+      "kind": "original",
+      "noise": "ideal",
+      "params": 514,
+      "run_type": "standard",
+      "data_fraction": 1.0,
+      "collapsed": true,
+      "budget_violated": false,
+      "config": {
+        "n_qubits": 5,
+        "n_layers": 3,
+        "shots": 0,
+        "entanglement": "linear",
+        "noise_model": "ideal",
+        "version": "N/A",
+        "training_mode": "controlled_spsa",
+        "protocol": {
+          "batch_size": 32,
+          "memory_size": 5000,
+          "gamma": 0.9,
+          "huber_delta": 1.0,
+          "epsilon_start": 1.0,
+          "epsilon_min": 0.1,
+          "epsilon_decay": 0.99,
+          "target_update_freq": 10,
+          "L_MIN": 3,
+          "CUT_PENALTY": 0.12,
+          "EXTEND_COST": 0.01,
+          "COMPLEXITY_LAMBDA": 0.03,
+          "MIN_CUT_BONUS": 0.3,
+          "MIN_CUT_BONUS_FINAL": 0.15,
+          "COLLAPSE_CUT_THRESHOLD": 1.0,
+          "USE_LAGRANGIAN": true,
+          "TARGET_CUT_PCT": 10.0,
+          "B_HARD_CUT_PCT": 30.0,
+          "LAGRANGIAN_LR": 0.02,
+          "LAMBDA_MAX": 2.0,
+          "LAMBDA_DELTA_MAX": 0.05,
+          "LAMBDA_CUT_EMA": 0.9,
+          "LAMBDA_FREEZE_EPOCHS": 1,
+          "EPSILON_DECAY_MODE": "per_step",
+          "EPSILON_DECAY_PER_STEP": 0.9995,
+          "FORCED_CUT_PROB": 0.25,
+          "FORCED_CUT_EPOCHS": 2,
+          "USE_STRATIFIED_REPLAY": true,
+          "MIN_CUT_QUOTA": 0.3,
+          "EXPLORATION_MODE": "boltzmann",
+          "BOLTZMANN_TEMP_START": 1.0,
+          "BOLTZMANN_TEMP_MIN": 0.1,
+          "BOLTZMANN_TEMP_DECAY": 0.99,
+          "OPTIMISTIC_CUT_BIAS": 0.5,
+          "Q_CLIP_RANGE": 50.0
+        },
+        "env_metadata": {
+          "timestamp": "2026-04-03T01:39:50.768444",
+          "python": "3.12.12 (main, Dec 17 2025, 21:07:08) [Clang 21.1.4 ]",
+          "numpy": "2.4.1",
+          "git_hash": "14b91889579675f1a57a500b60ec3c5be3a02efb",
+          "qiskit": "2.3.0"
+        }
+      },
+      "val_cr": 1.0,
+      "val_od": 0.25931009071529953,
+      "val_basesim": 0.25931009071529953,
+      "val_cr_median": 1.0,
+      "val_wvalcr": 0.0011037527593818985,
+      "val_dtw": 23.027146457433837,
+      "val_frechet": 0.15794569527345148,
+      "cut_pct": 0.0,
+      "n_segs": 1,
+      "n_val_episodes": 1,
+      "segs_per_traj": 1.0,
+      "best_epoch": 1,
+      "sse": 0.06724172314677687,
+      "silhouette": 0.0,
+      "episodes_to_best": 4,
+      "actions_to_best": 1927,
+      "total_episodes": 4,
+      "total_actions": 1927,
+      "final_val_cr": 1.0,
+      "final_cut_pct": 0.0,
+      "final_n_segs": 1,
+      "final_sse": 0.06724172314677687,
+      "final_silhouette": 0.0,
+      "final_dtw": 23.027146457433837,
+      "final_frechet": 0.15794569527345148,
+      "val_crs": [
+        1.0
+      ],
+      "val_ods": [
+        0.25931009071529953
+      ],
+      "val_basesims": [
+        0.25931009071529953
+      ],
+      "val_cr_medians": [
+        1.0
+      ],
+      "val_wvalcrs": [
+        0.0011037527593818985
+      ],
+      "val_dtws": [
+        23.027146457433837
+      ],
+      "val_frechets": [
+        0.15794569527345148
+      ],
+      "val_cut_pcts": [
+        0.0
+      ],
+      "val_seg_counts": [
+        1
+      ],
+      "val_sses": [
+        0.06724172314677687
+      ],
+      "val_silhouettes": [
+        0.0
+      ],
+      "q_margins": [
+        0.19687455232480414
+      ],
+      "replay_cut_pcts": [
+        24.701608718214842
+      ],
+      "replay_buf_cut_pcts": [
+        24.701608718214842
+      ],
+      "all_rewards": [
+        -20.164709559639157,
+        -19.764861471264286,
+        -15.47311344172483,
+        -14.17920234442923
+      ],
+      "lagrangian_history": [
+        0.12
+      ],
+      "final_lagrangian_lambda": 0.12,
+      "delta_q_train_stats": [
+        {
+          "mean": 1.5936053203050084e+21,
+          "median": -0.13162056356846885,
+          "std": 5.057903068018651e+22,
+          "min": -6.913508046907715e+22,
+          "max": 1.5701554144941716e+24,
+          "pct_positive": 12.039439543331603
+        }
+      ],
+      "delta_q_val_stats": [
+        {
+          "mean": -0.19687455232480414,
+          "median": -0.19575724620386728,
+          "std": 0.0071603138971745245,
+          "min": -0.2070919591021963,
+          "max": -0.14400377625142552,
+          "pct_positive": 0.0
+        }
+      ],
+      "wall_time": 0.4878199100494385,
+      "time_env": 0.1181330680847168,
+      "time_agent": 0.1234278678894043,
+      "time_overhead": 0.24625897407531738
+    }
+  ]
+}

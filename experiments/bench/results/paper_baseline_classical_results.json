@@ -1,0 +1,10 @@
+{
+    "mode": "paper_baseline",
+    "backend": "classical",
+    "tau": 0.1,
+    "metric": "OD",
+    "results": {
+        "OD": 38.2,
+        "runtime": 450.5
+    }
+}

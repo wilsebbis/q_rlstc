@@ -70,7 +70,7 @@ def dbscan_without_dist(split_traj,ep, sample):
     endcal = time()
     # print('cal dist matrix time: ', endcal - startcal, 'seconds')
     ep = float(ep)
-    sample = float(sample)
+    sample = int(sample)
     cluster = DBSCAN(eps=ep, min_samples=sample, metric='precomputed').fit(distance_matrix)
     cluster_lables = cluster.labels_
     for i in range(len(cluster_lables)):

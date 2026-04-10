@@ -1,0 +1,10 @@
+{
+    "mode": "repo_baseline",
+    "backend": "quantum",
+    "tau": 0.2,
+    "metric": "OD",
+    "results": {
+        "OD": 34.5,
+        "runtime": 121.00087308883667
+    }
+}

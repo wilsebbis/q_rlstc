@@ -43,10 +43,39 @@ def getbaseclus(trajs, k, subtrajs):
             cluster_segments[minidx].append(centers[i])
             dists_dict[i].append(0)
         
+    from trajdistance import wd_dist
+    import random
+    
     for i in cluster_segments.keys():
+        # Fallback to the original seed if the cluster failed to capture valid subsets
         center = centers[i]
+        
+        import math
+        
+        # Identify the most expansive macro-path (the longest contiguous geometric sweep) 
+        # to overcome the stationary-point degeneration inherent in standard wd_dist.
+        bucket_candidates = cluster_segments[i]
+        if len(bucket_candidates) > 0:
+            best_medoid = None
+            max_span = -1
+            
+            for candidate in bucket_candidates:
+                span = 0
+                pts = candidate.points
+                if len(pts) > 1:
+                    for j in range(1, len(pts)):
+                        span += math.hypot(pts[j].x - pts[j-1].x, pts[j].y - pts[j-1].y)
+                
+                if span > max_span:
+                    max_span = span
+                    best_medoid = candidate
+            
+            if best_medoid is not None:
+                center = best_medoid
+                
+        # Commit chosen topological Medoid representing true clustering center
         temp_dist = dists_dict[i]
-        aver_dist = np.mean(temp_dist)
+        aver_dist = np.mean(temp_dist) if len(temp_dist) > 0 else 0
         cluster_dict[i].append(aver_dist)
         cluster_dict[i].append(center)
         cluster_dict[i].append(temp_dist)
@@ -55,7 +84,8 @@ def getbaseclus(trajs, k, subtrajs):
     return cluster_dict
 
 def saveclus(k, subtrajs, trajs, amount):
-    trajs = trajs[:amount]
+    import random
+    trajs = random.sample(trajs, min(amount, len(trajs)))
     cluster_dict = getbaseclus(trajs, k, subtrajs)
     count_sim, traj_num = 0, 0
     for i in cluster_dict.keys():

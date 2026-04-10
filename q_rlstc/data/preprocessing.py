@@ -116,6 +116,37 @@ def split_traj(
     return sub_trajs
 
 
+def split_by_time_gap(trajs: List[List[Any]], max_gap_seconds: float = 1800.0) -> List[List[Any]]:
+    """Split trajectories when consecutive points differ in time by more than max_gap_seconds.
+
+    This addresses 'straight line' artifacts over missing data periods, creating
+    separate trajectories when there is a significant tracking gap.
+
+    Args:
+        trajs: List of trajectories, each a list of ``[lon, lat, time]``.
+        max_gap_seconds: Maximum allowed time gap between consecutive points.
+
+    Returns:
+        List of split trajectory lists.
+    """
+    split_trajs = []
+    for traj in trajs:
+        if not traj:
+            continue
+        current_sub = [traj[0]]
+        for i in range(1, len(traj)):
+            # traj[i] component 2 is the timestamp
+            time_diff = traj[i][2] - traj[i-1][2]
+            if time_diff > max_gap_seconds:
+                split_trajs.append(current_sub)
+                current_sub = [traj[i]]
+            else:
+                current_sub.append(traj[i])
+        if current_sub:
+            split_trajs.append(current_sub)
+    return split_trajs
+
+
 def normloctrajs(trajs: List[List[Any]]) -> List[np.ndarray]:
     """Z-score normalize longitude/latitude across all trajectories.
 
@@ -266,6 +297,7 @@ def preprocess_pipeline(
     """
     trajs = pickle.load(open(traj_path, 'rb'))
     trajslist = processtrajs(trajs)
+    trajslist = split_by_time_gap(trajslist)
     trajs = processlength(trajslist, max_length, min_length)
     norm_trajs = normtimetrajs(trajs)
     trajlists = convert2traj(norm_trajs)

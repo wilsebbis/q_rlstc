@@ -80,7 +80,7 @@ class OriginalClassicalDQN:
         # Exploration
         self.epsilon = self.config.epsilon_start
 
-        # Parameter count: 5*64 + 64 + 64*2 + 2 = 458
+        # Parameter count: 5*64 + 64 + 64*2 + 2 = 514
         self.n_params = (self.STATE_DIM * h + h) + (h * self.ACTION_DIM + self.ACTION_DIM)
 
         # Statistics

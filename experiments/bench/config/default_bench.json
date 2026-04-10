@@ -1,0 +1,24 @@
+{
+    "paper_baseline": {
+        "tau": 0.1,
+        "k": 10,
+        "preprocessing": true,
+        "metric": "OD",
+        "distance": "dIED",
+        "testdata": "../data/Tdrive_testdata",
+        "base_cluster": "../data/tdrive_clustercenter",
+        "modeldir": "../savemodels/kfoldmodels2",
+        "amount": 1000
+    },
+    "repo_baseline": {
+        "tau": 0.2,
+        "k": 10,
+        "preprocessing": false,
+        "metric": "OD",
+        "distance": "dIED",
+        "testdata": "../data/Tdrive_testdata",
+        "base_cluster": "../data/tdrive_clustercenter",
+        "modeldir": "../savemodels/kfoldmodels2",
+        "amount": 1000
+    }
+}

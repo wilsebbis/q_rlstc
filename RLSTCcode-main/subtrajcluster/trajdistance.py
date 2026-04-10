@@ -91,62 +91,11 @@ def getstaticIED(points, x, y, t1, t2): #t1<t2
     return sum
  
 def traj2trajIED(traj_points1, traj_points2):
-    t1s, t1e, t2s, t2e = traj_points1[0].t, traj_points1[-1].t, traj_points2[0].t, traj_points2[-1].t
-    if t1s >= t2e or t1e <= t2s:
+    # Pass directly into structural comparison (ignoring time) to prevent sub-trajectory elimination mapping
+    try:
+        return wd_dist(traj_points1, traj_points2)
+    except:
         return 1e10
-    sum = 0
-    timedtraj = timedTraj(traj_points2, t1s, t1e) 
-    cut1 = timedtraj.ts
-    cut2 = timedtraj.te
-    
-    commontraj = timedTraj(traj_points1, cut1, cut2) 
-    if t1s < cut1:
-        pd = getstaticIED(traj_points1, timedtraj.points[0].x, timedtraj.points[0].y, t1s, cut1)
-        sum += pd
-    if t2s < t1s:
-        pd = getstaticIED(traj_points2, traj_points1[0].x, traj_points1[0].y, t2s, t1s)
-        sum += pd
-    if t1e > cut2:
-        pd = getstaticIED(traj_points1, timedtraj.points[-1].x, timedtraj.points[-1].y, cut2, t1e)
-        sum += pd
-    if t1e < t2e:
-        pd = getstaticIED(traj_points2, traj_points1[-1].x, traj_points1[-1].y, t1e, t2e)
-        sum += pd
-    
-    if commontraj is not None and commontraj.size != 0:
-        newtime, lasttime = commontraj.ts, commontraj.ts
-        iter1, iter2 = 0, 0
-        lastp1, lastp2 = commontraj.points[0], timedtraj.points[0]
-
-        while lasttime != timedtraj.te:
-            if timedtraj.points[iter2+1].t == commontraj.points[iter1+1].t:
-                newtime = timedtraj.points[iter2+1].t
-                newp1 = commontraj.points[iter1+1]
-                newp2 = timedtraj.points[iter2+1]
-                iter1 += 1
-                iter2 += 1
-            elif timedtraj.points[iter2+1].t < commontraj.points[iter1+1].t:
-                t = timedtraj.points[iter2+1].t
-                x = makemid(commontraj.points[iter1].x, commontraj.points[iter1].t, commontraj.points[iter1+1].x, commontraj.points[iter1+1].t, t)
-                y = makemid(commontraj.points[iter1].y, commontraj.points[iter1].t, commontraj.points[iter1+1].y, commontraj.points[iter1+1].t, t)
-                newp1 = Point(x, y, t)
-                newp2 = timedtraj.points[iter2+1]
-                iter2 += 1
-            else:
-                t = commontraj.points[iter1+1].t
-                x = makemid(timedtraj.points[iter2].x, timedtraj.points[iter2].t, timedtraj.points[iter2 + 1].x,
-                            timedtraj.points[iter2 + 1].t, t)
-                y = makemid(timedtraj.points[iter2].y, timedtraj.points[iter2].t, timedtraj.points[iter2 + 1].y,
-                            timedtraj.points[iter2 + 1].t, t)
-                newp2 = Point(x, y, t)
-                newp1 = commontraj.points[iter1+1]
-                iter1 += 1
-            lasttime = newtime
-            pd = line2lineIDE(lastp1, newp1, lastp2, newp2)
-            sum += pd
-            lastp1 = newp1
-            lastp2 = newp2
-    return sum
 
 class Distance:
     def __init__(self, N, M):  # N = length of C, M = length of Q

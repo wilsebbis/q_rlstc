@@ -8,6 +8,9 @@ Provides metrics for:
 
 import numpy as np
 from typing import List, Set, Tuple, Optional
+from fastdtw import fastdtw
+import similaritymeasures
+from scipy.spatial.distance import euclidean
 
 
 def overall_distance(
@@ -273,3 +276,142 @@ def random_policy_advantage(
         Advantage delta (positive = agent outperforms random).
     """
     return random_valcr - agent_valcr
+
+def compute_dtw_distance(traj1: np.ndarray, traj2: np.ndarray) -> float:
+    """Compute Dynamic Time Warping distance between two trajectories."""
+    if len(traj1) == 0 or len(traj2) == 0:
+        return 0.0
+    distance, _ = fastdtw(traj1, traj2, dist=euclidean)
+    return float(distance)
+
+def compute_frechet_distance(traj1: np.ndarray, traj2: np.ndarray) -> float:
+    """Compute Discrete Fréchet distance between two trajectories."""
+    if len(traj1) == 0 or len(traj2) == 0:
+        return 0.0
+    return float(similaritymeasures.frechet_dist(traj1, traj2))
+
+def evaluate_standard_metrics(clusters_e: dict) -> Tuple[float, float]:
+    """Compute standard trajectory metrics (Avg DTW, Avg Fréchet).
+    
+    Args:
+        clusters_e: Dict mapping centroid index to list:
+                    [0]: list of distances
+                    [1]: list of sub-trajectories (Traj objects)
+                    [2]: center trajectory (List[Point])
+                    [3]: time dict
+                    [4]: segment lengths
+    
+    Returns:
+        (mean_dtw, mean_frechet)
+    """
+    total_dtw = 0.0
+    total_frechet = 0.0
+    count = 0
+    
+    for c_idx, cluster_data in clusters_e.items():
+        sub_trajs = cluster_data[1]  # List[Traj]
+        center = cluster_data[2]     # List[Point]
+        
+        if not sub_trajs or not center:
+            continue
+            
+        center_pts = np.array([[p.x, p.y] for p in center])
+        if len(center_pts) == 0:
+            continue
+            
+        for traj in sub_trajs:
+            traj_pts = np.array([[p.x, p.y] for p in traj.points])
+            if len(traj_pts) == 0:
+                continue
+                
+            total_dtw += compute_dtw_distance(traj_pts, center_pts)
+            total_frechet += compute_frechet_distance(traj_pts, center_pts)
+            count += 1
+            
+    if count == 0:
+        return 0.0, 0.0
+        
+    return total_dtw / count, total_frechet / count
+
+def compute_mdl_cost(clusters_e: dict) -> float:
+    """Compute Simplified Minimum Description Length (MDL) for a trajectory clustering.
+    
+    Acts as a defensive standard against ValCR fragmentation degeneracy by intrinsically 
+    penalizing excessive representative points.
+    
+    L(H) = Sum of path lengths of all centroids.
+    L(D|H) = Sum of distances from each point in sub-trajectories to the centroid.
+    MDL = L(H) + L(D|H)
+    """
+    l_h = 0.0
+    l_dh = 0.0
+    
+    for cid, cluster_data in clusters_e.items():
+        sub_trajs = cluster_data[1]  # List[Traj]
+        center = cluster_data[2]     # List[Point]
+        
+        if not sub_trajs or not center:
+            continue
+            
+        # calculate length of cluster center trajectory L(H)
+        if len(center) >= 2:
+            pts = np.array([[p.x, p.y] for p in center])
+            l_h += np.sum(np.sqrt(np.sum(np.diff(pts, axis=0)**2, axis=1)))
+            
+        # L(D|H) is captured by the total Over-Distance (Euclidean errors)
+        dists = cluster_data[0]
+        l_dh += sum(dists)
+        
+    return l_h + l_dh
+
+def compute_mhd_distance(traj1: np.ndarray, traj2: np.ndarray) -> float:
+    """Compute Modified Hausdorff Distance between two trajectories.
+    Robust to local noise and inherently worst-case deviation bounding.
+    """
+    if len(traj1) == 0 or len(traj2) == 0:
+        return 0.0
+        
+    # Directed Hausdorff distance h(traj1, traj2) and h(traj2, traj1)
+    from scipy.spatial.distance import directed_hausdorff
+    forward_hd = directed_hausdorff(traj1, traj2)[0]
+    backward_hd = directed_hausdorff(traj2, traj1)[0]
+    
+    return max(forward_hd, backward_hd)
+
+def evaluate_advanced_metrics(clusters_e: dict) -> Tuple[float, float]:
+    """Compute advanced robust trajectory metrics (MDL, Mean MHD).
+    
+    Args:
+        clusters_e: Dict mapping centroid index to cluster data structure.
+        
+    Returns:
+        (total_mdl, mean_mhd)
+    """
+    total_mdl = compute_mdl_cost(clusters_e)
+    
+    total_mhd = 0.0
+    count = 0
+    
+    for c_idx, cluster_data in clusters_e.items():
+        sub_trajs = cluster_data[1]  # List[Traj]
+        center = cluster_data[2]     # List[Point]
+        
+        if not sub_trajs or not center:
+            continue
+            
+        center_pts = np.array([[p.x, p.y] for p in center])
+        if len(center_pts) == 0:
+            continue
+            
+        for traj in sub_trajs:
+            traj_pts = np.array([[p.x, p.y] for p in traj.points])
+            if len(traj_pts) == 0:
+                continue
+                
+            total_mhd += compute_mhd_distance(traj_pts, center_pts)
+            count += 1
+            
+    mean_mhd = (total_mhd / count) if count > 0 else 0.0
+    
+    return total_mdl, mean_mhd
+

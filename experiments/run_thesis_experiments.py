@@ -50,6 +50,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from q_rlstc.clustering.metrics import evaluate_standard_metrics, evaluate_advanced_metrics
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -82,7 +83,7 @@ RLSTC_PARITY_PROTOCOL = {
     "EPSILON_DECAY_MODE": "per_step",
     "EPSILON_DECAY_PER_STEP": 0.99,
     "target_update_freq": 1,            # soft update every episode
-    "SOFT_TARGET_TAU": 0.001,           # ω from RLSTC paper (θ̂ ← ωθ̂ + (1−ω)θ)
+    "SOFT_TARGET_TAU": 0.05,            # ω from VLDB code: soft_update(0.05)
     "USE_SOFT_TARGET": True,
     # ── Shaping OFF (pure OD delta reward) ──
     "L_MIN": 1,                         # no min-segment constraint
@@ -475,6 +476,10 @@ def train_and_evaluate(
     val_sses = []           # SSE per epoch
     val_silhouettes = []    # Silhouette coefficient per epoch
     val_wvalcrs = []        # Length-weighted ValCR per epoch (fragmentation-robust)
+    val_dtws = []           # standard metric DTW
+    val_frechets = []       # standard metric Frechet
+    val_mdls = []           # Minimum Description Length metric
+    val_mhds = []           # Modified Hausdorff Distance metric
     q_margins = []          # D2: mean(Q_extend - Q_cut) per epoch (all val steps)
     replay_cut_pcts = []    # D3: CUT ratio in training actions per epoch
     replay_buf_cut_pcts = []  # D5: CUT ratio in actual replay buffer
@@ -586,10 +591,17 @@ def train_and_evaluate(
                 raw_split_od_next = observation_.flatten()[1]
                 total_actions += 1
 
-                if actual_action == 0 and reward == 0:
-                    reward = raw_split_od - raw_split_od_next
-
-                reward = scale_reward(reward)
+                if is_parity:
+                    # VLDB fidelity: EXTEND gets reward=0, CUT gets raw ΔOD.
+                    # No reward scaling/clipping (Delta 5+6 fix).
+                    if actual_action == 0:
+                        reward = 0.0
+                    # CUT reward is already set by env.step (ΔOD)
+                else:
+                    # Thesis pipeline: dense EXTEND reward + scaling
+                    if actual_action == 0 and reward == 0:
+                        reward = raw_split_od - raw_split_od_next
+                    reward = scale_reward(reward)
 
                 if reward_mode == "raw_od_delta":
                     # RLSTC Parity: pure OD delta, no shaping
@@ -629,8 +641,8 @@ def train_and_evaluate(
                     break
 
                 if replay.is_ready(batch_size):
-                    # Fix 2b: Action-stratified replay
-                    if use_stratified:
+                    # Fix 2b: Action-stratified replay (thesis mode only)
+                    if use_stratified and not is_parity:
                         states, actions, rewards_b, next_states, dones = \
                             replay.sample_batch_stratified(batch_size, min_cut_quota)
                     else:
@@ -639,6 +651,11 @@ def train_and_evaluate(
                     t_upd = time.time()
                     agent.update(states, actions, rewards_b, next_states, dones)
                     time_agent += time.time() - t_upd
+
+                    # Delta 7 fix: VLDB calls soft_update(0.05) after every
+                    # replay step inside the inner loop, not once per episode.
+                    if use_soft_target and is_parity and hasattr(agent, 'soft_update'):
+                        agent.soft_update(tau=soft_target_tau)
 
                 # Fix 4: Per-step epsilon decay for small-data regimes
                 if eps_mode == "per_step":
@@ -658,8 +675,9 @@ def train_and_evaluate(
             epoch_rewards.append(episode_reward)
             if eps_mode == "per_episode":
                 agent.decay_epsilon()
-            # RLSTC Parity: soft target update at end of each episode
-            if use_soft_target and hasattr(agent, 'soft_update'):
+            # Soft target update: per-episode (thesis mode only).
+            # Parity mode handles this per-replay-step above (Delta 7 fix).
+            if use_soft_target and not is_parity and hasattr(agent, 'soft_update'):
                 agent.soft_update(tau=soft_target_tau)
 
         # ── End-of-epoch validation (SINGLE PASS — fixed) ──────
@@ -721,6 +739,20 @@ def train_and_evaluate(
         except Exception:
             val_wvalcr = float('inf')
         val_wvalcrs.append(val_wvalcr)
+
+        try:
+            val_dtw, val_frechet = evaluate_standard_metrics(env.clusters_E)
+        except Exception:
+            val_dtw, val_frechet = float('inf'), float('inf')
+        val_dtws.append(val_dtw)
+        val_frechets.append(val_frechet)
+
+        try:
+            val_mdl, val_mhd = evaluate_advanced_metrics(env.clusters_E)
+        except Exception:
+            val_mdl, val_mhd = float('inf'), float('inf')
+        val_mdls.append(val_mdl)
+        val_mhds.append(val_mhd)
 
         try:
             val_sse = float(compute_sse(env.clusters_E))
@@ -810,6 +842,10 @@ def train_and_evaluate(
                 "val_od": float(val_od), "val_basesim": val_basesim,
                 "val_cr_median": val_cr_median,
                 "val_wvalcr": val_wvalcr,
+                "val_dtw": val_dtw,
+                "val_frechet": val_frechet,
+                "val_mdl": val_mdl,
+                "val_mhd": val_mhd,
                 "n_segs": val_segs, "epoch": epoch + 1,
                 "avg_reward": float(np.mean(epoch_rewards)),
                 "sse": val_sse,
@@ -955,6 +991,10 @@ def train_and_evaluate(
         "val_basesim": best_bundle.get("val_basesim", 0.0),
         "val_cr_median": best_bundle.get("val_cr_median", 0.0),
         "val_wvalcr": best_bundle.get("val_wvalcr", 0.0),
+        "val_dtw": best_bundle.get("val_dtw", float('inf')),
+        "val_frechet": best_bundle.get("val_frechet", float('inf')),
+        "val_mdl": best_bundle.get("val_mdl", float('inf')),
+        "val_mhd": best_bundle.get("val_mhd", float('inf')),
         "cut_pct": best_bundle["cut_pct"],  # GreedyCUT% (validation, post-L_MIN override)
         "n_segs": best_bundle["n_segs"],    # total segments across all val trajectories
         "n_val_episodes": eidx - sidx,       # number of validation trajectories
@@ -973,12 +1013,20 @@ def train_and_evaluate(
         "final_n_segs": val_seg_counts[-1] if val_seg_counts else 0,
         "final_sse": val_sses[-1] if val_sses else 0.0,
         "final_silhouette": val_silhouettes[-1] if val_silhouettes else 0.0,
+        "final_dtw": val_dtws[-1] if val_dtws else float('inf'),
+        "final_frechet": val_frechets[-1] if val_frechets else float('inf'),
+        "final_mdl": val_mdls[-1] if val_mdls else float('inf'),
+        "final_mhd": val_mhds[-1] if val_mhds else float('inf'),
         # Per-epoch series
         "val_crs": val_crs,
         "val_ods": val_ods,
         "val_basesims": val_basesims,
         "val_cr_medians": val_cr_medians,
         "val_wvalcrs": val_wvalcrs,
+        "val_dtws": val_dtws,
+        "val_frechets": val_frechets,
+        "val_mdls": val_mdls,
+        "val_mhds": val_mhds,
         "val_cut_pcts": val_cut_pcts,
         "val_seg_counts": val_seg_counts,
         "val_sses": val_sses,

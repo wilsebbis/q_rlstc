@@ -12,8 +12,13 @@ def processtrajs(trajs):
     for i in range(len(trajs)):
         temptraj = []
         for j in range(len(trajs[i])):
-            if trajs[i][j][1] >= 39.4 and trajs[i][j][1] <= 41.6 and trajs[i][j][0] >= 115.4 and trajs[i][j][0] <= 117.5:
-                temptraj.append(trajs[i][j])
+            val0, val1 = trajs[i][j][0], trajs[i][j][1]
+            # Auto-align inverted GeoLife coordinate geometries into T-Drive standard [Lon, Lat]
+            if 39.0 <= val0 <= 42.0 and 115.0 <= val1 <= 118.0:
+                val0, val1 = val1, val0
+            # Proceed checking boundaries against [Lon, Lat] assumptions
+            if val1 >= 39.4 and val1 <= 41.6 and val0 >= 115.4 and val0 <= 117.5:
+                temptraj.append([val0, val1, trajs[i][j][2]])
         if len(temptraj) != 0:
             trajslist.append(temptraj)
     return trajslist
