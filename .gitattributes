@@ -1,0 +1,15 @@
+experiments/datasets/*.npz filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/GEOLIFE/** filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/TDRIVE/** filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/*.csv filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/Tdrive filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/Tdrive_norm_traj filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/Geolife filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/geolife_norm_traj filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/geolife_testdata filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/porto_norm_traj filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/tdrive_clustercenter filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/geolife_clustercenter filter=lfs diff=lfs merge=lfs -text
+q_rlstc/data/porto_clustercenter filter=lfs diff=lfs merge=lfs -text
+latest_exp/geo-subtrajs filter=lfs diff=lfs merge=lfs -text
+latest_exp/geolife_rlstc_clusters filter=lfs diff=lfs merge=lfs -text
